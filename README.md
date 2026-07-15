@@ -8,96 +8,93 @@ always with humans in control of judgment calls.
 Built for **Smoothware**, a web/software agency (websites, apps, SEO, hosting,
 maintenance).
 
-> **Current status: Phase 0 (Foundation) complete.** See
+> **Current status: Phase 2 (Knowledge Base + RAG) complete.** See
 > [`ARCHITECTURE.md`](ARCHITECTURE.md) for the design and roadmap.
 
 ## Stack
 
 Laravel 13 · Filament 5 · MySQL 8 · PHP 8.5 · Pest 4 · spatie/laravel-permission
-+ Filament Shield. Anthropic Claude (from Phase 3). Everything runs in one
-Laravel app.
++ Filament Shield · Anthropic Claude (Phase 3) · Voyage AI embeddings (RAG).
+One Laravel app.
 
 ## Prerequisites
 
 - PHP **8.3+** (developed on 8.5), Composer 2
-- Node 20 + npm (for building panel assets)
-- Docker + Docker Compose (for MySQL)
+- Node 20 + npm (panel assets)
+- Docker + Docker Compose (MySQL)
 
 ## Local setup
 
 ```bash
-# 1. Install dependencies
 composer install
 npm install
 
-# 2. Environment
 cp .env.example .env
-php artisan key:generate           # only if APP_KEY is empty
+php artisan key:generate            # if APP_KEY is empty
 
-# 3. Start MySQL (host port 3308 — see docker-compose.yml)
-docker compose up -d
+docker compose up -d                # MySQL on host port 3308
 
-# 4. Create the schema and seed roles + an admin user
-php artisan migrate --seed
+php artisan migrate --seed          # schema + roles + admin user
+php artisan db:seed --class=DemoSeeder        # optional: sample CRM data
+php artisan db:seed --class=KnowledgeSeeder   # optional: starter KB + prompt rules
 
-# 5. Build front-end assets and serve
-npm run build                      # or `npm run dev` for hot reload
+npm run build                       # or `npm run dev`
+php artisan queue:work              # REQUIRED for RAG embeddings (see below)
 php artisan serve
 ```
 
-Then open **http://localhost:8000/admin** and log in:
+Open **http://localhost:8000/admin** — `admin@smoothware.test` / `password`.
 
-| Field | Value |
-|---|---|
-| Email | `admin@smoothware.test` |
-| Password | `password` |
+> ⚠️ Local-only development credentials. Change them before any deployment.
 
-> ⚠️ These are **local-only** development credentials. Change them before any
-> real deployment.
+## Background jobs (RAG embeddings)
+
+Knowledge-base entries are chunked and embedded by a **queued job** when they're
+published or edited. Run a worker so entries become retrievable:
+
+```bash
+php artisan queue:work                 # long-running worker
+# or, one-off after seeding/editing:
+php artisan queue:work --stop-when-empty
+```
+
+Embeddings use an offline **fake** provider by default (no API key). For
+production semantic quality, set `EMBEDDINGS_DRIVER=voyage` and `VOYAGE_API_KEY`
+in `.env` (Anthropic's API has no embeddings endpoint, hence a separate provider).
 
 ## Database
 
-MySQL 8 runs in Docker (`docker-compose.yml`), mapped to **host port 3308** to
-avoid clashing with other local MySQL containers. Connection settings live in
-`.env` (`DB_*`). Data persists in the `smoothware-mysql-data` volume.
-
-```bash
-docker compose up -d      # start
-docker compose down       # stop (keeps data)
-docker compose down -v    # stop and wipe the database volume
-```
+MySQL 8 in Docker (`docker-compose.yml`), host port **3308** (avoids other local
+MySQL containers). `docker compose down -v` wipes the data volume.
 
 ## Tests
 
 ```bash
-php artisan test
+php artisan test                    # 60 tests
 ```
 
-Tests run on an **in-memory SQLite** database for speed and isolation (the app
-itself targets MySQL). The foundation suite covers the append-only event log,
-the AI action approval flow, and RBAC panel access.
+Run on in-memory SQLite for speed and isolation; the app targets MySQL. Covers
+the audit log, AI + task state machines, call erasure, RAG retrieval, prompt-rule
+versioning, RBAC, and a UI render smoke test.
 
 ## Code style
 
 ```bash
-php vendor/bin/pint        # format (Laravel preset)
+php vendor/bin/pint
 ```
 
 ## Project conventions
 
 See [`ARCHITECTURE.md`](ARCHITECTURE.md). In short:
 
-- **Nothing is hard-deleted** (except GDPR erasure) — models soft-delete into
-  `archived_at`.
-- **Every mutation is audited** to the append-only `events` table via the
-  `LogsEvents` trait / `EventLogger` service.
-- **AI never writes directly.** AI-originated records go through
-  `AiActionService` (propose → human approve/reject → apply) and carry a
-  confidence score, the context version used, and the model id.
+- **Nothing is hard-deleted** (except GDPR erasure) — soft delete into `archived_at`.
+- **Every mutation is audited** to the append-only `events` table; PII values are
+  never written there.
+- **AI never writes directly** — AI records go through `AiActionService`
+  (propose → approve/reject → apply) with confidence, context version, and model id.
 
 ## Compliance note
 
-This product records and (later) places phone calls on a **Dutch number → EU /
-GDPR** rules apply. Call recording, retention, and outbound-calling features
-require explicit product/legal decisions before implementation — these are
-flagged in `ARCHITECTURE.md §6`.
+Recording/placing calls on a **Dutch number → EU/GDPR** rules apply. Call
+recording, retention, and outbound calling require explicit product/legal
+decisions before implementation — flagged in `ARCHITECTURE.md §8`.
