@@ -2,13 +2,16 @@
 
 namespace App\Enums;
 
-enum NoteCategory: string
+use Filament\Support\Contracts\HasColor;
+use Filament\Support\Contracts\HasLabel;
+
+enum NoteCategory: string implements HasColor, HasLabel
 {
     case Internal = 'internal';
     case FollowUp = 'follow_up';
     case Meeting = 'meeting';
 
-    public function label(): string
+    public function getLabel(): string
     {
         return match ($this) {
             self::Internal => 'Internal',
@@ -17,7 +20,7 @@ enum NoteCategory: string
         };
     }
 
-    public function color(): string
+    public function getColor(): string
     {
         return match ($this) {
             self::Internal => 'gray',

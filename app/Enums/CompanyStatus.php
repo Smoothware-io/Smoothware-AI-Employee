@@ -2,7 +2,10 @@
 
 namespace App\Enums;
 
-enum CompanyStatus: string
+use Filament\Support\Contracts\HasColor;
+use Filament\Support\Contracts\HasLabel;
+
+enum CompanyStatus: string implements HasColor, HasLabel
 {
     case Lead = 'lead';
     case Qualified = 'qualified';
@@ -10,7 +13,7 @@ enum CompanyStatus: string
     case Dormant = 'dormant';
     case Disqualified = 'disqualified';
 
-    public function label(): string
+    public function getLabel(): string
     {
         return match ($this) {
             self::Lead => 'Lead',
@@ -21,7 +24,7 @@ enum CompanyStatus: string
         };
     }
 
-    public function color(): string
+    public function getColor(): string
     {
         return match ($this) {
             self::Lead => 'gray',

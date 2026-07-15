@@ -2,7 +2,10 @@
 
 namespace App\Enums;
 
-enum CallStatus: string
+use Filament\Support\Contracts\HasColor;
+use Filament\Support\Contracts\HasLabel;
+
+enum CallStatus: string implements HasColor, HasLabel
 {
     case Completed = 'completed';
     case Missed = 'missed';
@@ -11,7 +14,7 @@ enum CallStatus: string
     case Failed = 'failed';
     case Voicemail = 'voicemail';
 
-    public function label(): string
+    public function getLabel(): string
     {
         return match ($this) {
             self::Completed => 'Completed',
@@ -23,7 +26,7 @@ enum CallStatus: string
         };
     }
 
-    public function color(): string
+    public function getColor(): string
     {
         return match ($this) {
             self::Completed => 'success',
