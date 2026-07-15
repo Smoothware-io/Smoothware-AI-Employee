@@ -2,59 +2,43 @@
 
 namespace App\Filament\Resources\Companies\RelationManagers;
 
-use Filament\Actions\AssociateAction;
-use Filament\Actions\BulkActionGroup;
+use App\Enums\AppointmentStatus;
+use App\Filament\Resources\Appointments\Tables\AppointmentsTable;
 use Filament\Actions\CreateAction;
-use Filament\Actions\DeleteAction;
-use Filament\Actions\DeleteBulkAction;
-use Filament\Actions\DissociateAction;
-use Filament\Actions\DissociateBulkAction;
-use Filament\Actions\EditAction;
+use Filament\Forms\Components\DateTimePicker;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Schema;
-use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 
 class AppointmentsRelationManager extends RelationManager
 {
     protected static string $relationship = 'appointments';
 
+    protected static ?string $recordTitleAttribute = 'title';
+
     public function form(Schema $schema): Schema
     {
         return $schema
             ->components([
-                TextInput::make('title')
-                    ->required()
-                    ->maxLength(255),
+                TextInput::make('title')->required()->maxLength(255),
+                DateTimePicker::make('starts_at')->seconds(false)->required(),
+                DateTimePicker::make('ends_at')->seconds(false),
+                TextInput::make('location')->maxLength(255),
+                Select::make('status')
+                    ->options(AppointmentStatus::class)
+                    ->default(AppointmentStatus::Scheduled->value)
+                    ->required(),
+                Select::make('contact_id')->relationship('contact', 'full_name')->searchable(),
+                Textarea::make('description')->columnSpanFull(),
             ]);
     }
 
     public function table(Table $table): Table
     {
-        return $table
-            ->recordTitleAttribute('title')
-            ->columns([
-                TextColumn::make('title')
-                    ->searchable(),
-            ])
-            ->filters([
-                //
-            ])
-            ->headerActions([
-                CreateAction::make(),
-                AssociateAction::make(),
-            ])
-            ->recordActions([
-                EditAction::make(),
-                DissociateAction::make(),
-                DeleteAction::make(),
-            ])
-            ->toolbarActions([
-                BulkActionGroup::make([
-                    DissociateBulkAction::make(),
-                    DeleteBulkAction::make(),
-                ]),
-            ]);
+        return AppointmentsTable::configure($table)
+            ->headerActions([CreateAction::make()]);
     }
 }

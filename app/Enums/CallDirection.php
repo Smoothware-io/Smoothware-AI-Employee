@@ -2,13 +2,27 @@
 
 namespace App\Enums;
 
-enum CallDirection: string
+use Filament\Support\Contracts\HasColor;
+use Filament\Support\Contracts\HasLabel;
+
+enum CallDirection: string implements HasColor, HasLabel
 {
     case Inbound = 'inbound';
     case Outbound = 'outbound';
 
-    public function label(): string
+    public function getLabel(): string
     {
-        return ucfirst($this->value);
+        return match ($this) {
+            self::Inbound => 'Inbound',
+            self::Outbound => 'Outbound',
+        };
+    }
+
+    public function getColor(): string
+    {
+        return match ($this) {
+            self::Inbound => 'info',
+            self::Outbound => 'gray',
+        };
     }
 }

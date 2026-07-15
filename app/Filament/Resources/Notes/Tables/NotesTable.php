@@ -2,47 +2,45 @@
 
 namespace App\Filament\Resources\Notes\Tables;
 
+use App\Enums\NoteCategory;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
-use Filament\Actions\ForceDeleteBulkAction;
-use Filament\Actions\RestoreBulkAction;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
+use Illuminate\Support\Str;
 
 class NotesTable
 {
     public static function configure(Table $table): Table
     {
         return $table
+            ->defaultSort('created_at', 'desc')
             ->columns([
-                TextColumn::make('company.name')
-                    ->searchable(),
-                TextColumn::make('category')
-                    ->badge()
-                    ->searchable(),
-                TextColumn::make('source')
-                    ->badge()
-                    ->searchable(),
-                TextColumn::make('aiAction.id')
-                    ->searchable(),
-                TextColumn::make('created_by')
-                    ->numeric()
-                    ->sortable(),
                 TextColumn::make('created_at')
-                    ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
-                TextColumn::make('updated_at')
-                    ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
-                TextColumn::make('archived_at')
-                    ->dateTime()
+                    ->label('When')
+                    ->dateTime('d M Y, H:i')
                     ->sortable(),
+                TextColumn::make('category')
+                    ->badge(),
+                TextColumn::make('body')
+                    ->label('Note')
+                    ->formatStateUsing(fn (?string $state): string => Str::limit(strip_tags((string) $state), 80))
+                    ->wrap()
+                    ->searchable(),
+                TextColumn::make('company.name')
+                    ->label('Company')
+                    ->sortable()
+                    ->toggleable(),
+                TextColumn::make('author.name')
+                    ->label('Author')
+                    ->placeholder('—'),
             ])
             ->filters([
+                SelectFilter::make('category')
+                    ->options(collect(NoteCategory::cases())->mapWithKeys(fn (NoteCategory $c) => [$c->value => $c->getLabel()])),
                 TrashedFilter::make(),
             ])
             ->recordActions([
@@ -51,8 +49,6 @@ class NotesTable
             ->toolbarActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make(),
-                    ForceDeleteBulkAction::make(),
-                    RestoreBulkAction::make(),
                 ]),
             ]);
     }

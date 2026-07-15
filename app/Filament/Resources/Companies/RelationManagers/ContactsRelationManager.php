@@ -2,59 +2,36 @@
 
 namespace App\Filament\Resources\Companies\RelationManagers;
 
-use Filament\Actions\AssociateAction;
-use Filament\Actions\BulkActionGroup;
+use App\Filament\Resources\Contacts\Tables\ContactsTable;
 use Filament\Actions\CreateAction;
-use Filament\Actions\DeleteAction;
-use Filament\Actions\DeleteBulkAction;
-use Filament\Actions\DissociateAction;
-use Filament\Actions\DissociateBulkAction;
-use Filament\Actions\EditAction;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Toggle;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Schema;
-use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 
 class ContactsRelationManager extends RelationManager
 {
     protected static string $relationship = 'contacts';
 
+    protected static ?string $recordTitleAttribute = 'full_name';
+
     public function form(Schema $schema): Schema
     {
         return $schema
             ->components([
-                TextInput::make('full_name')
-                    ->required()
-                    ->maxLength(255),
+                TextInput::make('first_name')->required()->maxLength(255),
+                TextInput::make('last_name')->maxLength(255),
+                TextInput::make('job_title')->maxLength(255),
+                Toggle::make('is_decision_maker'),
+                TextInput::make('email')->email()->maxLength(255),
+                TextInput::make('phone')->tel()->maxLength(255),
             ]);
     }
 
     public function table(Table $table): Table
     {
-        return $table
-            ->recordTitleAttribute('full_name')
-            ->columns([
-                TextColumn::make('full_name')
-                    ->searchable(),
-            ])
-            ->filters([
-                //
-            ])
-            ->headerActions([
-                CreateAction::make(),
-                AssociateAction::make(),
-            ])
-            ->recordActions([
-                EditAction::make(),
-                DissociateAction::make(),
-                DeleteAction::make(),
-            ])
-            ->toolbarActions([
-                BulkActionGroup::make([
-                    DissociateBulkAction::make(),
-                    DeleteBulkAction::make(),
-                ]),
-            ]);
+        return ContactsTable::configure($table)
+            ->headerActions([CreateAction::make()]);
     }
 }

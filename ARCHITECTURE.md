@@ -116,8 +116,8 @@ coloured badges (AI = amber). The structural half is `ai_action_id`, linking any
 AI-created row to its approval record.
 
 **Known Phase 1 follow-ups (not blockers):**
-- Secondary resource tables (Contacts / Notes / Calls) still use Filament's
-  generated columns and could be tidied to match Companies/Tasks.
+- All resource tables and the company-page relation managers now share tidy,
+  consistent columns (badges, PII-safe previews); relation-manager forms fixed.
 - The appointments "calendar overview" is a date-sorted list for v1; a true
   month/week calendar is a Filament plugin add (e.g. FullCalendar).
 - Task block/cancel reason capture is one-click for now (reason editable on the

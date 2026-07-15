@@ -5,10 +5,9 @@ namespace App\Filament\Resources\Contacts\Tables;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
-use Filament\Actions\ForceDeleteBulkAction;
-use Filament\Actions\RestoreBulkAction;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 
@@ -17,43 +16,37 @@ class ContactsTable
     public static function configure(Table $table): Table
     {
         return $table
+            ->defaultSort('created_at', 'desc')
             ->columns([
+                TextColumn::make('full_name')
+                    ->label('Name')
+                    ->weight('bold')
+                    ->searchable(['first_name', 'last_name'])
+                    ->description(fn ($record): ?string => $record->job_title),
                 TextColumn::make('company.name')
-                    ->searchable(),
-                TextColumn::make('first_name')
-                    ->searchable(),
-                TextColumn::make('last_name')
-                    ->searchable(),
-                TextColumn::make('job_title')
-                    ->searchable(),
+                    ->label('Company')
+                    ->sortable()
+                    ->toggleable(),
                 IconColumn::make('is_decision_maker')
-                    ->boolean(),
+                    ->label('Decision-maker')
+                    ->boolean()
+                    ->alignCenter(),
                 TextColumn::make('email')
-                    ->label('Email address')
+                    ->icon('heroicon-m-envelope')
+                    ->copyable()
+                    ->placeholder('—')
                     ->searchable(),
                 TextColumn::make('phone')
-                    ->searchable(),
+                    ->icon('heroicon-m-phone')
+                    ->copyable()
+                    ->placeholder('—'),
                 TextColumn::make('source')
                     ->badge()
-                    ->searchable(),
-                TextColumn::make('aiAction.id')
-                    ->searchable(),
-                TextColumn::make('created_by')
-                    ->numeric()
-                    ->sortable(),
-                TextColumn::make('created_at')
-                    ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
-                TextColumn::make('updated_at')
-                    ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
-                TextColumn::make('archived_at')
-                    ->dateTime()
-                    ->sortable(),
+                    ->toggleable(),
             ])
             ->filters([
+                TernaryFilter::make('is_decision_maker')
+                    ->label('Decision-makers'),
                 TrashedFilter::make(),
             ])
             ->recordActions([
@@ -62,8 +55,6 @@ class ContactsTable
             ->toolbarActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make(),
-                    ForceDeleteBulkAction::make(),
-                    RestoreBulkAction::make(),
                 ]),
             ]);
     }

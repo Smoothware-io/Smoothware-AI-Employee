@@ -2,18 +2,16 @@
 
 namespace App\Filament\Resources\Companies\RelationManagers;
 
-use Filament\Actions\AssociateAction;
-use Filament\Actions\BulkActionGroup;
+use App\Enums\CallDirection;
+use App\Enums\CallStatus;
+use App\Filament\Resources\Calls\Tables\CallsTable;
 use Filament\Actions\CreateAction;
-use Filament\Actions\DeleteAction;
-use Filament\Actions\DeleteBulkAction;
-use Filament\Actions\DissociateAction;
-use Filament\Actions\DissociateBulkAction;
-use Filament\Actions\EditAction;
+use Filament\Forms\Components\DateTimePicker;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Schema;
-use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 
 class CallsRelationManager extends RelationManager
@@ -24,37 +22,20 @@ class CallsRelationManager extends RelationManager
     {
         return $schema
             ->components([
-                TextInput::make('id')
-                    ->required()
-                    ->maxLength(255),
+                Select::make('direction')->options(CallDirection::class)->required(),
+                Select::make('status')->options(CallStatus::class)->required(),
+                TextInput::make('from_number')->tel()->maxLength(255),
+                TextInput::make('to_number')->tel()->maxLength(255),
+                DateTimePicker::make('started_at')->seconds(false),
+                DateTimePicker::make('ended_at')->seconds(false),
+                TextInput::make('duration_seconds')->numeric()->label('Duration (seconds)'),
+                Textarea::make('summary')->columnSpanFull(),
             ]);
     }
 
     public function table(Table $table): Table
     {
-        return $table
-            ->recordTitleAttribute('id')
-            ->columns([
-                TextColumn::make('id')
-                    ->searchable(),
-            ])
-            ->filters([
-                //
-            ])
-            ->headerActions([
-                CreateAction::make(),
-                AssociateAction::make(),
-            ])
-            ->recordActions([
-                EditAction::make(),
-                DissociateAction::make(),
-                DeleteAction::make(),
-            ])
-            ->toolbarActions([
-                BulkActionGroup::make([
-                    DissociateBulkAction::make(),
-                    DeleteBulkAction::make(),
-                ]),
-            ]);
+        return CallsTable::configure($table)
+            ->headerActions([CreateAction::make()]);
     }
 }

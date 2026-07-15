@@ -2,59 +2,40 @@
 
 namespace App\Filament\Resources\Companies\RelationManagers;
 
-use Filament\Actions\AssociateAction;
-use Filament\Actions\BulkActionGroup;
+use App\Enums\TaskType;
+use App\Filament\Resources\Tasks\Tables\TasksTable;
 use Filament\Actions\CreateAction;
-use Filament\Actions\DeleteAction;
-use Filament\Actions\DeleteBulkAction;
-use Filament\Actions\DissociateAction;
-use Filament\Actions\DissociateBulkAction;
-use Filament\Actions\EditAction;
+use Filament\Forms\Components\DateTimePicker;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Schema;
-use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 
 class TasksRelationManager extends RelationManager
 {
     protected static string $relationship = 'tasks';
 
+    protected static ?string $recordTitleAttribute = 'title';
+
     public function form(Schema $schema): Schema
     {
         return $schema
             ->components([
-                TextInput::make('title')
-                    ->required()
-                    ->maxLength(255),
+                Select::make('type')->options(TaskType::class)->required(),
+                TextInput::make('title')->required()->maxLength(255),
+                Textarea::make('description')->columnSpanFull(),
+                Select::make('assigned_to')->relationship('assignee', 'name')->searchable(),
+                DateTimePicker::make('due_at')->seconds(false),
             ]);
     }
 
     public function table(Table $table): Table
     {
-        return $table
-            ->recordTitleAttribute('title')
-            ->columns([
-                TextColumn::make('title')
-                    ->searchable(),
-            ])
-            ->filters([
-                //
-            ])
-            ->headerActions([
-                CreateAction::make(),
-                AssociateAction::make(),
-            ])
-            ->recordActions([
-                EditAction::make(),
-                DissociateAction::make(),
-                DeleteAction::make(),
-            ])
-            ->toolbarActions([
-                BulkActionGroup::make([
-                    DissociateBulkAction::make(),
-                    DeleteBulkAction::make(),
-                ]),
-            ]);
+        // New tasks start in the default 'open' status; the workflow buttons in
+        // TasksTable drive every transition from there.
+        return TasksTable::configure($table)
+            ->headerActions([CreateAction::make()]);
     }
 }

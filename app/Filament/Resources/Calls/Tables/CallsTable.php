@@ -2,13 +2,14 @@
 
 namespace App\Filament\Resources\Calls\Tables;
 
+use App\Enums\CallStatus;
+use App\Models\Call;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
-use Filament\Actions\ForceDeleteBulkAction;
-use Filament\Actions\RestoreBulkAction;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 
@@ -17,83 +18,43 @@ class CallsTable
     public static function configure(Table $table): Table
     {
         return $table
+            ->defaultSort('started_at', 'desc')
             ->columns([
-                TextColumn::make('company.name')
-                    ->searchable(),
-                TextColumn::make('contact.id')
-                    ->searchable(),
-                TextColumn::make('direction')
-                    ->badge()
-                    ->searchable(),
-                TextColumn::make('status')
-                    ->badge()
-                    ->searchable(),
-                TextColumn::make('from_number')
-                    ->searchable(),
-                TextColumn::make('to_number')
-                    ->searchable(),
                 TextColumn::make('started_at')
-                    ->dateTime()
-                    ->sortable(),
-                TextColumn::make('ended_at')
-                    ->dateTime()
-                    ->sortable(),
+                    ->label('When')
+                    ->dateTime('d M Y, H:i')
+                    ->sortable()
+                    ->placeholder('—'),
+                TextColumn::make('direction')
+                    ->badge(),
+                TextColumn::make('status')
+                    ->badge(),
+                TextColumn::make('company.name')
+                    ->label('Company')
+                    ->sortable()
+                    ->toggleable(),
                 TextColumn::make('duration_seconds')
-                    ->numeric()
-                    ->sortable(),
-                TextColumn::make('handled_by')
-                    ->numeric()
-                    ->sortable(),
-                TextColumn::make('external_provider')
-                    ->searchable(),
-                TextColumn::make('external_id')
-                    ->searchable(),
-                TextColumn::make('recording_disk')
-                    ->searchable(),
-                TextColumn::make('recording_path')
-                    ->searchable(),
-                TextColumn::make('recording_bytes')
-                    ->numeric()
-                    ->sortable(),
-                TextColumn::make('transcript_status')
-                    ->searchable(),
-                IconColumn::make('consent_obtained')
-                    ->boolean(),
-                TextColumn::make('consent_method')
-                    ->searchable(),
-                TextColumn::make('disclosed_at')
-                    ->dateTime()
-                    ->sortable(),
-                TextColumn::make('retention_expires_at')
-                    ->dateTime()
-                    ->sortable(),
-                TextColumn::make('content_erased_at')
-                    ->dateTime()
-                    ->sortable(),
-                TextColumn::make('erased_by')
-                    ->numeric()
-                    ->sortable(),
-                TextColumn::make('source')
-                    ->badge()
-                    ->searchable(),
-                TextColumn::make('aiAction.id')
-                    ->searchable(),
-                TextColumn::make('created_by')
-                    ->numeric()
-                    ->sortable(),
-                TextColumn::make('created_at')
-                    ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
-                TextColumn::make('updated_at')
-                    ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
-                TextColumn::make('archived_at')
-                    ->dateTime()
-                    ->sortable(),
+                    ->label('Duration')
+                    ->formatStateUsing(fn (?int $state): string => $state ? gmdate('i:s', $state) : '—'),
+                TextColumn::make('handler.name')
+                    ->label('Handled by')
+                    ->placeholder('—')
+                    ->toggleable(),
+                IconColumn::make('recording')
+                    ->label('Rec.')
+                    ->alignCenter()
+                    ->icon(fn (Call $record): ?string => $record->hasRecording() ? 'heroicon-m-microphone' : null)
+                    ->tooltip(fn (Call $record): ?string => $record->hasRecording() ? 'Has recording' : null),
+                IconColumn::make('content_erased_at')
+                    ->label('Erased')
+                    ->alignCenter()
+                    ->icon(fn (Call $record): ?string => $record->isContentErased() ? 'heroicon-m-shield-check' : null)
+                    ->color('danger')
+                    ->tooltip(fn (Call $record): ?string => $record->isContentErased() ? 'Personal content erased (GDPR)' : null),
             ])
             ->filters([
+                SelectFilter::make('status')
+                    ->options(collect(CallStatus::cases())->mapWithKeys(fn (CallStatus $s) => [$s->value => $s->getLabel()])),
                 TrashedFilter::make(),
             ])
             ->recordActions([
@@ -102,8 +63,6 @@ class CallsTable
             ->toolbarActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make(),
-                    ForceDeleteBulkAction::make(),
-                    RestoreBulkAction::make(),
                 ]),
             ]);
     }
