@@ -36,6 +36,7 @@ class Company extends Model
         'industry',
         'status',
         'owner_id',
+        'campaign_id',
         'source',
         'ai_action_id',
         'created_by',
@@ -67,6 +68,11 @@ class Company extends Model
     public function owner(): BelongsTo
     {
         return $this->belongsTo(User::class, 'owner_id');
+    }
+
+    public function campaign(): BelongsTo
+    {
+        return $this->belongsTo(Campaign::class);
     }
 
     public function creator(): BelongsTo
