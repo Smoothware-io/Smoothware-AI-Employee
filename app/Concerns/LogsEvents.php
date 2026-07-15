@@ -14,10 +14,19 @@ use Illuminate\Support\Str;
  * transition). This is how Phase 1+ features feed the Company Timeline without
  * each one re-implementing logging.
  *
+ * GDPR note: the event log is APPEND-ONLY, so it can never satisfy a
+ * right-to-erasure request on its own. We therefore practice **reference
+ * logging** — the *values* of personal-data fields are never written here.
+ * A model lists such fields in `$auditRedacted`; the trail still records that
+ * those fields changed (by name), keeping the audit complete without persisting
+ * PII into an immutable store. `$hidden` attributes are always redacted too.
+ *
  * @mixin Model
  */
 trait LogsEvents
 {
+    public const REDACTED = '[redacted]';
+
     public static function bootLogsEvents(): void
     {
         static::created(function (Model $model): void {
@@ -47,6 +56,7 @@ trait LogsEvents
     /**
      * Record a domain event for this model, namespaced by its event name, e.g.
      * $task->recordEvent('status_changed', [...]) -> action "task.status_changed".
+     * Callers passing custom payloads are responsible for not including PII.
      */
     public function recordEvent(string $verb, array $payload = []): void
     {
@@ -63,13 +73,27 @@ trait LogsEvents
         return Str::snake(class_basename($this));
     }
 
-    /** Attributes captured on creation (hidden attributes are excluded). */
-    protected function eventCreatedPayload(): array
+    /**
+     * Attribute names whose VALUES must never be written to the append-only log
+     * (personal data, secrets). Override per model:
+     *   protected array $auditRedacted = ['email', 'phone', 'first_name'];
+     *
+     * @return array<int, string>
+     */
+    public function auditRedacted(): array
     {
-        return $this->attributesToArray();
+        $declared = property_exists($this, 'auditRedacted') ? $this->auditRedacted : [];
+
+        return array_values(array_unique(array_merge($this->getHidden(), $declared)));
     }
 
-    /** Before/after diff of the changed attributes on update. */
+    /** Attributes captured on creation, with PII values scrubbed. */
+    protected function eventCreatedPayload(): array
+    {
+        return ['attributes' => $this->scrubForAudit($this->attributesToArray())];
+    }
+
+    /** Before/after diff of the changed attributes on update, PII scrubbed. */
     protected function eventChangedPayload(): array
     {
         $after = $this->getChanges();
@@ -84,6 +108,27 @@ trait LogsEvents
             $before[$key] = $this->getOriginal($key);
         }
 
-        return ['before' => $before, 'after' => $after];
+        return [
+            'before' => $this->scrubForAudit($before),
+            'after' => $this->scrubForAudit($after),
+        ];
+    }
+
+    /**
+     * Replace the values of redacted (PII/secret) attributes with a marker,
+     * preserving the key so the audit still shows *that* the field was involved.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    protected function scrubForAudit(array $data): array
+    {
+        foreach ($this->auditRedacted() as $key) {
+            if (array_key_exists($key, $data)) {
+                $data[$key] = self::REDACTED;
+            }
+        }
+
+        return $data;
     }
 }

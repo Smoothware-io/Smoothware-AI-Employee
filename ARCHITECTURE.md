@@ -4,7 +4,7 @@ A CRM built to be operated jointly by human sales reps and an AI agent. This is
 a **living document**: it is updated at the end of every phase so the project
 stays legible as it grows.
 
-> **Status:** Phase 0 (Foundation) complete. Phase 1 (Core CRM) not started.
+> **Status:** Phase 0 (Foundation) + hardening pass complete. Phase 1 (Core CRM) not started.
 
 ---
 
@@ -54,6 +54,12 @@ later phase.
   domain events like `task.status_changed`.
 - This single table powers the **Company Timeline (Phase 1)** and **Reporting
   (Phase 8)** — no per-feature ad hoc logging.
+- **Reference logging for GDPR (hardening pass):** the log is append-only, so it
+  can never be erased. Personal-data *values* are therefore never written — a
+  model lists PII fields in `$auditRedacted`, and the trail records that those
+  fields changed by name only (values stored as `[redacted]`). Non-PII context
+  (status, flags, timestamps) is kept. This resolves the append-only-vs-right-to-
+  erasure conflict for the audit trail. `$hidden` attributes are always redacted.
 
 ### 2.3 Soft delete everywhere
 - Convention: **`archived_at`** column (not Laravel's `deleted_at`) via each
@@ -120,6 +126,11 @@ docker-compose.yml                 # MySQL 8 on host port 3308
 - Covered: event actor resolution, append-only enforcement, the `LogsEvents`
   auto-log, the full AI action approval state machine (including illegal
   transitions), and the panel-access RBAC gate.
+- PII redaction in the audit log is tested — no personal-data values leak into
+  the `events` table.
+- **CI:** `.github/workflows/ci.yml` runs Pint (style) + Pest on every push / PR,
+  plus a MySQL-8 migration smoke test to catch MySQL-specific schema issues that
+  the in-memory SQLite test DB would miss.
 
 ---
 
@@ -130,8 +141,10 @@ These are tracked here so they are never silently defaulted.
 - **Jurisdiction = Netherlands / EU (GDPR).** The company operates a Dutch phone
   number. Consequences baked in now:
   - **Right to erasure** requires a true hard-delete path for a person's data +
-    recordings, alongside normal archiving. The schema anticipates this;
-    the erasure workflow itself is built when call data appears (Phase 3).
+    recordings, alongside normal archiving. *Done now:* the append-only event
+    log never stores PII values (reference logging, §2.2), so erasure never has
+    to touch it. *Remaining:* the erasure workflow for PII held in domain tables
+    (contacts, transcripts) is built when that data appears (Phase 3).
   - **Call recording** (Phase 3) needs disclosure/consent at call start, a
     defined retention period, and secure storage. *Requires an explicit product
     decision before implementation.*
@@ -151,7 +164,7 @@ These are tracked here so they are never silently defaulted.
 
 | Phase | Scope | Status |
 |---|---|---|
-| 0 | Foundation (auth/RBAC, event log, soft delete, AI action framework) | ✅ Done |
+| 0 | Foundation + hardening (auth/RBAC, event log, soft delete, AI action framework, GDPR-safe audit, CI) | ✅ Done |
 | 1 | Core CRM (Companies, Contacts, Notes, Tasks, Appointments, Calls) | ⬜ Next |
 | 2 | Knowledge Base + RAG pipeline | ⬜ |
 | 3 | AI Receptionist (shadow mode → autonomous) | ⬜ |

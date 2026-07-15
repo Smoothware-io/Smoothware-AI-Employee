@@ -28,6 +28,14 @@ class User extends Authenticatable implements FilamentUser
     const DELETED_AT = 'archived_at';
 
     /**
+     * Personal-data fields whose values must never land in the append-only
+     * event log. See {@see LogsEvents}.
+     *
+     * @var array<int, string>
+     */
+    protected array $auditRedacted = ['name', 'email'];
+
+    /**
      * @return array<string, string>
      */
     protected function casts(): array
