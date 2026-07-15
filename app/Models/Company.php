@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
@@ -96,6 +97,23 @@ class Company extends Model
     public function calls(): HasMany
     {
         return $this->hasMany(Call::class);
+    }
+
+    /** Human-owned analysis (Phase 4) — one per company; AI never writes here. */
+    public function manualAnalysis(): HasOne
+    {
+        return $this->hasOne(CompanyManualAnalysis::class);
+    }
+
+    /** AI-generated analyses (Phase 4), newest first — regeneration adds a row. */
+    public function aiAnalyses(): HasMany
+    {
+        return $this->hasMany(CompanyAiAnalysis::class)->latest('generated_at');
+    }
+
+    public function latestAiAnalysis(): HasOne
+    {
+        return $this->hasOne(CompanyAiAnalysis::class)->latestOfMany('generated_at');
     }
 
     /** The activity feed for this company's detail page (Phase 1 timeline). */
