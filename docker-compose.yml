@@ -1,0 +1,28 @@
+# Local development services for Smoothware AI Employee.
+# Only infrastructure lives here (DB); the Laravel app runs on the host via
+# `php artisan serve`. This keeps the dev loop fast while giving everyone an
+# identical MySQL. Bring it up with:  docker compose up -d
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: smoothware-mysql
+    restart: unless-stopped
+    # Host port 3308 -> container 3306. 3306/3307 are already used by other
+    # local containers on this machine, so we deliberately pick 3308.
+    ports:
+      - "3308:3306"
+    environment:
+      MYSQL_DATABASE: smoothware
+      MYSQL_USER: smoothware
+      MYSQL_PASSWORD: secret
+      MYSQL_ROOT_PASSWORD: root
+    volumes:
+      - smoothware-mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-psecret"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  smoothware-mysql-data:
