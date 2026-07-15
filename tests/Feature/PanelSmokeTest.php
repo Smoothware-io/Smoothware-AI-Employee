@@ -1,10 +1,13 @@
 <?php
 
 use App\Enums\AnalysisPriority;
+use App\Enums\ImportRowDisposition;
+use App\Enums\ImportStatus;
 use App\Models\Company;
 use App\Models\CompanyAiAnalysis;
 use App\Models\CompanyManualAnalysis;
 use App\Models\Contact;
+use App\Models\Import;
 use App\Models\Note;
 use App\Models\PromptRule;
 use App\Models\PromptRuleSet;
@@ -22,8 +25,7 @@ beforeEach(function () {
     $admin->assignRole('super_admin');
     actingAs($admin);
 
-    // Verify pages COMPILE and RENDER; Shield authz is exercised in RbacTest.
-    Gate::before(fn () => true);
+    Gate::before(fn () => true); // isolate render from Shield authz (see RbacTest)
 });
 
 it('renders every resource index page', function (string $url) {
@@ -39,6 +41,8 @@ it('renders every resource index page', function (string $url) {
     '/admin/prompt-rule-sets',
     '/admin/ai-actions',
     '/admin/ai-runs',
+    '/admin/imports',
+    '/admin/campaigns',
 ]);
 
 it('renders a company detail page with relation managers, timeline, and AI analysis', function () {
@@ -46,13 +50,23 @@ it('renders a company detail page with relation managers, timeline, and AI analy
     Contact::factory()->for($company)->create();
     Note::factory()->for($company)->create();
     Task::factory()->for($company)->create();
-    // A rep/AI priority mismatch so the disagreement badge renders.
     CompanyManualAnalysis::factory()->for($company)->create(['priority' => AnalysisPriority::High]);
     CompanyAiAnalysis::factory()->for($company)->create(['inferred_priority' => AnalysisPriority::Low]);
 
     get("/admin/companies/{$company->getKey()}")->assertOk();
-    // The edit page hosts the inline Manual Analysis form section.
     get("/admin/companies/{$company->getKey()}/edit")->assertOk();
+});
+
+it('renders an import preview page with staged rows', function () {
+    $import = Import::factory()->create(['status' => ImportStatus::Previewed, 'create_count' => 1]);
+    $import->rows()->create([
+        'row_number' => 1,
+        'raw' => ['name' => 'Acme BV'],
+        'mapped' => ['name' => 'Acme BV'],
+        'disposition' => ImportRowDisposition::Create,
+    ]);
+
+    get("/admin/imports/{$import->getKey()}")->assertOk();
 });
 
 it('renders a prompt-rule-set detail page with its rules', function () {

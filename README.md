@@ -8,7 +8,7 @@ always with humans in control of judgment calls.
 Built for **Smoothware**, a web/software agency (websites, apps, SEO, hosting,
 maintenance).
 
-> **Current status: Phase 4 (Company Analysis) complete.** See
+> **Current status: Phase 5 (CSV Import) complete.** See
 > [`ARCHITECTURE.md`](ARCHITECTURE.md) for the design and roadmap.
 
 ## Stack
@@ -70,7 +70,7 @@ PostgreSQL containers). `docker compose down -v` wipes the data volume.
 ## Tests
 
 ```bash
-php artisan test                    # 79 tests
+php artisan test                    # 85 tests
 ```
 
 Run on in-memory SQLite for speed and isolation; the app targets PostgreSQL. Covers

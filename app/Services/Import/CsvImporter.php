@@ -134,11 +134,11 @@ class CsvImporter
     private function readCsv(string $path): array
     {
         $handle = fopen($path, 'r');
-        $headers = array_map(fn ($h): string => trim((string) $h), fgetcsv($handle) ?: []);
+        $headers = array_map(fn ($h): string => trim((string) $h), fgetcsv($handle, escape: '') ?: []);
         $count = count($headers);
 
         $records = [];
-        while (($row = fgetcsv($handle)) !== false) {
+        while (($row = fgetcsv($handle, escape: '')) !== false) {
             $records[] = array_pad(array_slice($row, 0, $count), $count, null);
         }
         fclose($handle);
