@@ -64,6 +64,7 @@ trait LogsEvents
             action: $this->eventName().'.'.$verb,
             entity: $this,
             payload: $payload,
+            companyId: $this->eventTimelineCompanyId(),
         );
     }
 
@@ -71,6 +72,18 @@ trait LogsEvents
     public function eventName(): string
     {
         return Str::snake(class_basename($this));
+    }
+
+    /**
+     * The company this model's events anchor to on the timeline. Default reads a
+     * `company_id` attribute (covers Contact/Note/Task/Appointment/Call); the
+     * Company model overrides to return its own key.
+     */
+    public function eventTimelineCompanyId(): ?int
+    {
+        $companyId = $this->getAttribute('company_id');
+
+        return $companyId === null ? null : (int) $companyId;
     }
 
     /**

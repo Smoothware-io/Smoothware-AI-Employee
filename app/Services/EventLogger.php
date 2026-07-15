@@ -25,11 +25,13 @@ class EventLogger
         array $payload = [],
         ?ActorType $actorType = null,
         ?int $actorId = null,
+        ?int $companyId = null,
     ): Event {
         return $this->write(
             action: $action,
             entityType: $entity?->getMorphClass() ?? 'system',
             entityId: $entity?->getKey(),
+            companyId: $companyId,
             payload: $payload,
             actorType: $actorType,
             actorId: $actorId,
@@ -47,14 +49,16 @@ class EventLogger
         array $payload = [],
         ?ActorType $actorType = null,
         ?int $actorId = null,
+        ?int $companyId = null,
     ): Event {
-        return $this->write($action, $entityType, $entityId, $payload, $actorType, $actorId);
+        return $this->write($action, $entityType, $entityId, $companyId, $payload, $actorType, $actorId);
     }
 
     private function write(
         string $action,
         string $entityType,
         ?int $entityId,
+        ?int $companyId,
         array $payload,
         ?ActorType $actorType,
         ?int $actorId,
@@ -64,6 +68,7 @@ class EventLogger
         return Event::create([
             'entity_type' => $entityType,
             'entity_id' => $entityId,
+            'company_id' => $companyId,
             'actor_type' => $resolvedType,
             'actor_id' => $resolvedId,
             'action' => $action,

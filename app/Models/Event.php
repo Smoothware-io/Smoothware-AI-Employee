@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\ActorType;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
@@ -14,6 +15,7 @@ use RuntimeException;
  *
  * @property string $entity_type
  * @property int|null $entity_id
+ * @property int|null $company_id
  * @property ActorType $actor_type
  * @property int|null $actor_id
  * @property string $action
@@ -27,6 +29,7 @@ class Event extends Model
     protected $fillable = [
         'entity_type',
         'entity_id',
+        'company_id',
         'actor_type',
         'actor_id',
         'action',
@@ -63,9 +66,21 @@ class Event extends Model
         return $this->morphTo('entity', 'entity_type', 'entity_id');
     }
 
+    /** The company this event is anchored to, for the timeline feed. */
+    public function company(): BelongsTo
+    {
+        return $this->belongsTo(Company::class);
+    }
+
     /** The acting user, when actor_type is `user`. Null for ai_agent/system. */
     public function actorUser(): BelongsTo
     {
         return $this->belongsTo(User::class, 'actor_id');
+    }
+
+    /** A company's activity feed: everything anchored to it, newest first. */
+    public function scopeForCompanyTimeline(Builder $query, int $companyId): Builder
+    {
+        return $query->where('company_id', $companyId)->latest('created_at')->latest('id');
     }
 }
