@@ -28,7 +28,7 @@ return new class extends Migration
             $table->string('status', 20)->default('draft'); // draft|approved|rejected|auto_applied
 
             // The proposed change (what would be created/updated on approval).
-            $table->json('proposed_payload');
+            $table->jsonb('proposed_payload');
 
             // The record this action targets/produces (loose polymorphic ref).
             // Null until known (e.g. a brand-new company created on apply).

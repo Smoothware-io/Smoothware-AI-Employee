@@ -1,28 +1,30 @@
 # Local development services for Smoothware AI Employee.
 # Only infrastructure lives here (DB); the Laravel app runs on the host via
-# `php artisan serve`. This keeps the dev loop fast while giving everyone an
-# identical MySQL. Bring it up with:  docker compose up -d
+# `php artisan serve`. Bring it up with:  docker compose up -d
 services:
-  mysql:
-    image: mysql:8.0
-    container_name: smoothware-mysql
+  postgres:
+    # pgvector image = PostgreSQL 17 + the `vector` extension preinstalled. We do
+    # NOT enable the extension yet (RAG uses brute-force cosine in PHP for now,
+    # see ARCHITECTURE §8); the image just makes adopting pgvector a one-liner
+    # later (`CREATE EXTENSION vector`).
+    image: pgvector/pgvector:pg17
+    container_name: smoothware-postgres
     restart: unless-stopped
-    # Host port 3308 -> container 3306. 3306/3307 are already used by other
-    # local containers on this machine, so we deliberately pick 3308.
+    # Host port 5434 -> container 5432. 5432/5433 are used by other local
+    # containers on this machine, so we deliberately pick 5434.
     ports:
-      - "3308:3306"
+      - "5434:5432"
     environment:
-      MYSQL_DATABASE: smoothware
-      MYSQL_USER: smoothware
-      MYSQL_PASSWORD: secret
-      MYSQL_ROOT_PASSWORD: root
+      POSTGRES_DB: smoothware
+      POSTGRES_USER: smoothware
+      POSTGRES_PASSWORD: secret
     volumes:
-      - smoothware-mysql-data:/var/lib/mysql
+      - smoothware-postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-psecret"]
+      test: ["CMD-SHELL", "pg_isready -U smoothware -d smoothware"]
       interval: 5s
       timeout: 5s
       retries: 20
 
 volumes:
-  smoothware-mysql-data:
+  smoothware-postgres-data:

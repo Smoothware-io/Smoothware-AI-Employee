@@ -13,7 +13,7 @@ maintenance).
 
 ## Stack
 
-Laravel 13 · Filament 5 · MySQL 8 · PHP 8.5 · Pest 4 · spatie/laravel-permission
+Laravel 13 · Filament 5 · PostgreSQL 17 · PHP 8.5 · Pest 4 · spatie/laravel-permission
 + Filament Shield · Anthropic Claude (Phase 3) · Voyage AI embeddings (RAG).
 One Laravel app.
 
@@ -21,7 +21,7 @@ One Laravel app.
 
 - PHP **8.3+** (developed on 8.5), Composer 2
 - Node 20 + npm (panel assets)
-- Docker + Docker Compose (MySQL)
+- Docker + Docker Compose (PostgreSQL)
 
 ## Local setup
 
@@ -32,7 +32,7 @@ npm install
 cp .env.example .env
 php artisan key:generate            # if APP_KEY is empty
 
-docker compose up -d                # MySQL on host port 3308
+docker compose up -d                # PostgreSQL on host port 5434
 
 php artisan migrate --seed          # schema + roles + admin user
 php artisan db:seed --class=DemoSeeder        # optional: sample CRM data
@@ -64,8 +64,8 @@ in `.env` (Anthropic's API has no embeddings endpoint, hence a separate provider
 
 ## Database
 
-MySQL 8 in Docker (`docker-compose.yml`), host port **3308** (avoids other local
-MySQL containers). `docker compose down -v` wipes the data volume.
+PostgreSQL 17 in Docker (`docker-compose.yml`), host port **5434** (avoids other local
+PostgreSQL containers). `docker compose down -v` wipes the data volume.
 
 ## Tests
 
@@ -73,7 +73,7 @@ MySQL containers). `docker compose down -v` wipes the data volume.
 php artisan test                    # 60 tests
 ```
 
-Run on in-memory SQLite for speed and isolation; the app targets MySQL. Covers
+Run on in-memory SQLite for speed and isolation; the app targets PostgreSQL. Covers
 the audit log, AI + task state machines, call erasure, RAG retrieval, prompt-rule
 versioning, RBAC, and a UI render smoke test.
 

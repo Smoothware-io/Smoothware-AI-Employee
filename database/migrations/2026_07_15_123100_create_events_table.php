@@ -38,7 +38,7 @@ return new class extends Migration
             $table->string('action');
 
             // Structured detail: before/after diff or a snapshot.
-            $table->json('payload')->nullable();
+            $table->jsonb('payload')->nullable();
 
             // Append-only: creation time only, no updated_at.
             $table->timestamp('created_at')->nullable();

@@ -15,7 +15,7 @@ stays legible as it grows.
 |---|---|---|
 | Framework | **Laravel 13** (PHP 8.5) | Mature, relational, batteries-included. |
 | Admin/UI | **Filament 5** (TALL: Tailwind, Alpine, Livewire) | A CRM/admin-panel engine. Server-rendered; no separate SPA. Badge theming makes "AI data looks different from human data" straightforward. |
-| Database | **MySQL 8** (via Docker Compose) | Fits the relational model. No native vector index — see §8. |
+| Database | **PostgreSQL 17** (via Docker Compose) | Fits the relational model; jsonb for KB/analysis JSON; pgvector available but deferred (see §8). |
 | Auth & RBAC | **spatie/laravel-permission** + **Filament Shield** | Roles + per-resource policies. |
 | AI reasoning | **Anthropic Claude API** — Opus 4.8 / Haiku 4.5 | Used from Phase 3. Generation only (no embeddings). |
 | Embeddings | **Voyage AI** (prod) / offline fake (dev/test) | Separate provider because Claude has no embeddings API. Swappable via `EmbeddingClient`. |
@@ -148,18 +148,18 @@ app/
 database/{migrations,seeders,factories}/   # seeders: Role, AdminUser, Demo, Knowledge
 tests/Feature/             # + TaskStateMachine, CallContentErasure, CompanyTimeline, Phase1Pii,
                            #   KnowledgeChunker, RagRetrieval, PromptRuleSetActivation, PanelSmoke
-docker-compose.yml         # MySQL 8 on host port 3308
+docker-compose.yml         # PostgreSQL 17 on host port 5434
 ```
 
 ## 7. Testing
 - Pest, `php artisan test` (60 tests). In-memory SQLite for speed (queue = sync,
-  so embed jobs run inline in tests); app targets MySQL; CI runs a MySQL migrate
+  so embed jobs run inline in tests); app targets PostgreSQL; CI runs a Postgres migrate
   smoke.
 - Covered: audit log + append-only, PII redaction, AI-action & Task state
   machines, call erasure, timeline anchoring, RBAC, chunking, RAG ranking +
   published-only, ruleset activation, context version, and a UI render smoke
   across every resource page.
-- **CI:** `.github/workflows/ci.yml` — Pint + Pest + MySQL migrate.
+- **CI:** `.github/workflows/ci.yml` — Pint + Pest + Postgres migrate.
 
 ---
 
@@ -174,9 +174,9 @@ docker-compose.yml         # MySQL 8 on host port 3308
   - **Outbound** (Phase 6): Dutch/EU telemarketing rules → compliance gate first.
   - **Sonetel**: need API/webhook docs before Phase 3; pull recordings into our
     own object storage (MinIO/S3) so we control retention/erasure.
-- **RAG on MySQL:** no native vector index; small KB → brute-force cosine in-app
-  is sufficient. The **fake embeddings are lexical** (bag-of-words) — semantic
-  quality arrives with Voyage. Revisit vector storage only at scale.
+- **Database engine (decision, pre-Phase 3):** switched MySQL -> PostgreSQL while the cost was near-zero (no MySQL-specific SQL, no production data, tests engine-agnostic on SQLite). Banks jsonb indexing for Phase 4/8 and keeps pgvector a cheap future option; Laravel treats both engines as first-class.
+- **RAG storage, pgvector deferred:** embeddings live in `jsonb`; retrieval is brute-force cosine in PHP (fine for a small KB). The DB image ships pgvector but it is unused for now -- adopt it as a localized swap of `KnowledgeRetriever` + the embedding column when chunk volume/latency justifies it (needs a Postgres-based retrieval test then, since pgvector is not in SQLite).
+- **Fake embeddings are lexical** (bag-of-words) -- semantic quality arrives with Voyage.
 - **Embeddings provider**: build-swappable now; wire Voyage (`EMBEDDINGS_DRIVER=voyage`
   + `VOYAGE_API_KEY`) when ready.
 - **Transcript search vs. encryption** (Phase 3): encryption blocks SQL search;

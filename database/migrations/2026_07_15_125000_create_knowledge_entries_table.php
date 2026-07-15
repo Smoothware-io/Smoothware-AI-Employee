@@ -19,7 +19,7 @@ return new class extends Migration
             $table->string('type', 30);              // KnowledgeType
             $table->string('title');
             $table->longText('body')->nullable();    // the text that gets embedded
-            $table->json('data')->nullable();        // type-specific structure (pricing factors, portfolio meta, ...)
+            $table->jsonb('data')->nullable();        // type-specific structure (pricing factors, portfolio meta, ...)
             $table->string('status', 20)->default('draft'); // draft|published|archived
 
             $table->timestamp('last_verified_at')->nullable();
