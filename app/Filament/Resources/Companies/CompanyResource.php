@@ -6,6 +6,7 @@ use App\Filament\Resources\Companies\Pages\CreateCompany;
 use App\Filament\Resources\Companies\Pages\EditCompany;
 use App\Filament\Resources\Companies\Pages\ListCompanies;
 use App\Filament\Resources\Companies\Pages\ViewCompany;
+use App\Filament\Resources\Companies\RelationManagers\AiAnalysesRelationManager;
 use App\Filament\Resources\Companies\RelationManagers\AppointmentsRelationManager;
 use App\Filament\Resources\Companies\RelationManagers\CallsRelationManager;
 use App\Filament\Resources\Companies\RelationManagers\ContactsRelationManager;
@@ -57,6 +58,7 @@ class CompanyResource extends Resource
             TasksRelationManager::class,
             AppointmentsRelationManager::class,
             CallsRelationManager::class,
+            AiAnalysesRelationManager::class,
             TimelineEventsRelationManager::class,
         ];
     }

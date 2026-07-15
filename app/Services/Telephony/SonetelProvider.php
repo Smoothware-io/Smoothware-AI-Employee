@@ -19,7 +19,7 @@ use Illuminate\Support\Carbon;
  * voicemail / a human, Sonetel records it, then we pull the recording, transcribe
  * it, and draft records for review. "Live AI on the call" is NOT buildable on
  * Sonetel — it needs a SIP media server (FreeSWITCH/Asterisk/Pipecat) or a
- * second vendor (Twilio/Telnyx). Tracked as a separate decision (ARCHITECTURE §9).
+ * second vendor (Twilio/Telnyx). Tracked as a separate decision (ARCHITECTURE “Open decisions”).
  *
  * This method parses a Sonetel "call-completed" callback if one is configured;
  * otherwise the activation step adds a scheduled job that polls the Call

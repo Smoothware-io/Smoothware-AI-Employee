@@ -9,7 +9,7 @@ use App\Models\KnowledgeChunk;
 /**
  * Retrieves the most relevant knowledge chunks for a query. Embeds the query,
  * then brute-force cosine-ranks it against every published chunk in PHP (fine
- * for a single agency's KB; see ARCHITECTURE §9). The score is the Phase-3
+ * for a single agency's KB; see ARCHITECTURE “Open decisions”). The score is the Phase-3
  * grounding signal: below a threshold, the AI should defer to a human rather
  * than improvise.
  */

@@ -1,6 +1,9 @@
 <?php
 
+use App\Enums\AnalysisPriority;
 use App\Models\Company;
+use App\Models\CompanyAiAnalysis;
+use App\Models\CompanyManualAnalysis;
 use App\Models\Contact;
 use App\Models\Note;
 use App\Models\PromptRule;
@@ -19,10 +22,7 @@ beforeEach(function () {
     $admin->assignRole('super_admin');
     actingAs($admin);
 
-    // This suite verifies the Filament resource pages COMPILE and RENDER.
-    // Shield authorization (super_admin => all generated permissions) is
-    // exercised in RbacTest and verified against real Postgres; here we bypass it
-    // so a render regression can't hide behind a permissions failure.
+    // Verify pages COMPILE and RENDER; Shield authz is exercised in RbacTest.
     Gate::before(fn () => true);
 });
 
@@ -41,13 +41,18 @@ it('renders every resource index page', function (string $url) {
     '/admin/ai-runs',
 ]);
 
-it('renders a company detail page with its relation managers and timeline', function () {
+it('renders a company detail page with relation managers, timeline, and AI analysis', function () {
     $company = Company::factory()->create();
     Contact::factory()->for($company)->create();
     Note::factory()->for($company)->create();
     Task::factory()->for($company)->create();
+    // A rep/AI priority mismatch so the disagreement badge renders.
+    CompanyManualAnalysis::factory()->for($company)->create(['priority' => AnalysisPriority::High]);
+    CompanyAiAnalysis::factory()->for($company)->create(['inferred_priority' => AnalysisPriority::Low]);
 
     get("/admin/companies/{$company->getKey()}")->assertOk();
+    // The edit page hosts the inline Manual Analysis form section.
+    get("/admin/companies/{$company->getKey()}/edit")->assertOk();
 });
 
 it('renders a prompt-rule-set detail page with its rules', function () {

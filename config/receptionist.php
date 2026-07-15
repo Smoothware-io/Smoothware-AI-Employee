@@ -26,7 +26,7 @@ return [
     | ⚠ PLACEHOLDER VALUES — legal/compliance sign-off required before going live
     | with real calls (NL/EU GDPR). These are configurable on purpose so legal
     | can set the real retention period and disclosure wording WITHOUT a code
-    | change. See ARCHITECTURE.md §9.
+    | change. See ARCHITECTURE.md “Open decisions”.
     */
     'recording' => [
         'retention_days' => (int) env('CALL_RETENTION_DAYS', 90),
