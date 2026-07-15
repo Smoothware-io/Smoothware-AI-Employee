@@ -49,4 +49,13 @@ return [
         ],
     ],
 
+    /*
+    | Anthropic Claude — reasoning/analysis for the AI receptionist (Phase 3+).
+    | Generation only (embeddings live under 'embeddings' above).
+    */
+    'anthropic' => [
+        'key' => env('ANTHROPIC_API_KEY'),
+        'model' => env('ANTHROPIC_MODEL_REASONING', 'claude-opus-4-8'),
+        'effort' => env('ANTHROPIC_EFFORT', 'high'),
+    ],
 ];

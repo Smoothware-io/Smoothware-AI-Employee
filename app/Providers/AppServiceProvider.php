@@ -3,17 +3,23 @@
 namespace App\Providers;
 
 use App\Contracts\EmbeddingClient;
+use App\Contracts\ReceptionistLlm;
+use App\Contracts\TelephonyProvider;
+use App\Contracts\TranscriptionClient;
 use App\Services\Embeddings\FakeEmbeddingClient;
 use App\Services\Embeddings\VoyageEmbeddingClient;
+use App\Services\Receptionist\ClaudeReceptionistLlm;
+use App\Services\Receptionist\FakeReceptionistLlm;
+use App\Services\Telephony\FakeTelephonyProvider;
+use App\Services\Telephony\FakeTranscriptionClient;
+use App\Services\Telephony\SonetelProvider;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        // Resolve the embeddings provider from config. Defaults to the offline
-        // fake (dev/tests/CI); set EMBEDDINGS_DRIVER=voyage + VOYAGE_API_KEY for
-        // production. Anthropic's API has no embeddings endpoint, hence this.
+        // Embeddings (Phase 2). Defaults to the offline fake; VOYAGE in prod.
         $this->app->bind(EmbeddingClient::class, function ($app): EmbeddingClient {
             $config = (array) $app['config']->get('services.embeddings', []);
 
@@ -25,6 +31,29 @@ class AppServiceProvider extends ServiceProvider
                 ),
                 default => new FakeEmbeddingClient,
             };
+        });
+
+        // Telephony (Phase 3). Everything external is a fake by default so the
+        // pipeline runs with no vendor account.
+        $this->app->bind(TelephonyProvider::class, function ($app): TelephonyProvider {
+            return match ($app['config']->get('receptionist.drivers.telephony', 'fake')) {
+                'sonetel' => new SonetelProvider,
+                default => new FakeTelephonyProvider,
+            };
+        });
+
+        $this->app->bind(TranscriptionClient::class, fn (): TranscriptionClient => new FakeTranscriptionClient);
+
+        $this->app->bind(ReceptionistLlm::class, function ($app): ReceptionistLlm {
+            if ($app['config']->get('receptionist.drivers.llm', 'fake') === 'claude') {
+                return new ClaudeReceptionistLlm(
+                    (string) $app['config']->get('services.anthropic.key', ''),
+                    (string) $app['config']->get('services.anthropic.model', 'claude-opus-4-8'),
+                    (string) $app['config']->get('services.anthropic.effort', 'high'),
+                );
+            }
+
+            return new FakeReceptionistLlm;
         });
     }
 

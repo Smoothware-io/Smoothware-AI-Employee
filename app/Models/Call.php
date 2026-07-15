@@ -5,11 +5,13 @@ namespace App\Models;
 use App\Concerns\HasProvenance;
 use App\Concerns\LogsEvents;
 use App\Enums\CallDirection;
+use App\Enums\CallIntent;
 use App\Enums\CallStatus;
 use App\Services\CallContentEraser;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
@@ -22,6 +24,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  *
  * @property CallDirection $direction
  * @property CallStatus $status
+ * @property CallIntent|null $intent
  */
 class Call extends Model
 {
@@ -34,6 +37,7 @@ class Call extends Model
         'contact_id',
         'direction',
         'status',
+        'intent',
         'from_number',
         'to_number',
         'started_at',
@@ -71,6 +75,7 @@ class Call extends Model
         return [
             'direction' => CallDirection::class,
             'status' => CallStatus::class,
+            'intent' => CallIntent::class,
             'started_at' => 'datetime',
             'ended_at' => 'datetime',
             'duration_seconds' => 'integer',
@@ -112,5 +117,11 @@ class Call extends Model
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    /** AI analysis runs performed on this call (Phase 3+). */
+    public function aiRuns(): MorphMany
+    {
+        return $this->morphMany(AiRun::class, 'subject');
     }
 }
