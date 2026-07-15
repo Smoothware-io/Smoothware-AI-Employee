@@ -21,7 +21,7 @@ beforeEach(function () {
 
     // This suite verifies the Filament resource pages COMPILE and RENDER.
     // Shield authorization (super_admin => all generated permissions) is
-    // exercised in RbacTest and verified against real MySQL; here we bypass it
+    // exercised in RbacTest and verified against real Postgres; here we bypass it
     // so a render regression can't hide behind a permissions failure.
     Gate::before(fn () => true);
 });
@@ -37,6 +37,8 @@ it('renders every resource index page', function (string $url) {
     '/admin/calls',
     '/admin/knowledge-entries',
     '/admin/prompt-rule-sets',
+    '/admin/ai-actions',
+    '/admin/ai-runs',
 ]);
 
 it('renders a company detail page with its relation managers and timeline', function () {

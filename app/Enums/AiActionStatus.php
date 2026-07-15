@@ -2,6 +2,9 @@
 
 namespace App\Enums;
 
+use Filament\Support\Contracts\HasColor;
+use Filament\Support\Contracts\HasLabel;
+
 /**
  * Lifecycle of an AI-proposed action.
  *
@@ -11,20 +14,30 @@ namespace App\Enums;
  *   auto_applied -> executed autonomously without human review (earned autonomy),
  *                   still fully audited
  */
-enum AiActionStatus: string
+enum AiActionStatus: string implements HasColor, HasLabel
 {
     case Draft = 'draft';
     case Approved = 'approved';
     case Rejected = 'rejected';
     case AutoApplied = 'auto_applied';
 
-    public function label(): string
+    public function getLabel(): string
     {
         return match ($this) {
             self::Draft => 'Draft (awaiting review)',
             self::Approved => 'Approved',
             self::Rejected => 'Rejected',
             self::AutoApplied => 'Auto-applied',
+        };
+    }
+
+    public function getColor(): string
+    {
+        return match ($this) {
+            self::Draft => 'warning',
+            self::Approved => 'success',
+            self::Rejected => 'danger',
+            self::AutoApplied => 'info',
         };
     }
 

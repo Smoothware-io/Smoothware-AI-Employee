@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\Schema;
  *
  * The embedding is stored as a jsonb array of floats. Postgres pgvector is
  * available but deferred; a single agency's KB is small enough that brute-force
- * cosine similarity in PHP is sufficient for now (see ARCHITECTURE §8).
+ * cosine similarity in PHP is sufficient for now (see ARCHITECTURE §9).
  */
 return new class extends Migration
 {
