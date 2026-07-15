@@ -35,4 +35,18 @@ return [
         ],
     ],
 
+    /*
+    | Embeddings provider for RAG (Phase 2). Anthropic's API is generation-only,
+    | so embeddings come from a separate provider. Defaults to an offline fake
+    | for dev/tests; set EMBEDDINGS_DRIVER=voyage + VOYAGE_API_KEY in production.
+    */
+    'embeddings' => [
+        'driver' => env('EMBEDDINGS_DRIVER', 'fake'),
+        'voyage' => [
+            'key' => env('VOYAGE_API_KEY'),
+            'model' => env('VOYAGE_MODEL', 'voyage-3'),
+            'dimensions' => (int) env('VOYAGE_DIMENSIONS', 1024),
+        ],
+    ],
+
 ];
