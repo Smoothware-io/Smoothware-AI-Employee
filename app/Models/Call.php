@@ -45,6 +45,7 @@ class Call extends Model
         'duration_seconds',
         'handled_by',
         'summary',
+        'objective',
         'external_provider',
         'external_id',
         'recording_disk',
