@@ -440,6 +440,21 @@ resources — a different mechanism.
   (`EmbeddingClient`, `TelephonyProvider`, `TranscriptionClient`, `ReceptionistLlm`,
   `WebsiteAnalyzer`, `CompanyAnalysisLlm`) — build + test with no vendor account.
 
+### UI constraint: no Tailwind utilities outside Filament's components
+
+The admin panel has **no custom theme** (no `->viteTheme()`, no npm build), so the
+only stylesheet shipped is Filament's own compiled CSS. That contains its
+component classes (`.fi-section`, `.fi-badge`, `.fi-icon`) and its colour custom
+properties, but **not** general Tailwind utilities. Verified 2026-07-16: `.flex`,
+`.p-4`, `.rounded-xl`, `.text-sm` and `bg-warning-50` are all absent from
+`public/css/filament/filament/app.css`.
+
+**So a hand-written Blade view must build from Filament components, not raw
+utilities** — otherwise it renders as unstyled stacked text while every test still
+passes. `ProviderStatusBanner` was written the wrong way first and caught before
+it was ever seen. Adding a custom theme (npm + `viteTheme`) is the alternative if
+bespoke layout is ever genuinely needed.
+
 ## 12. Key paths
 
 ```
@@ -483,7 +498,7 @@ docker-compose.yml          # PostgreSQL 17 on host port 5434
 ```
 
 ## 13. Testing
-- Pest, `php artisan test` (**221 tests**). In-memory SQLite for speed (queue =
+- Pest, `php artisan test` (**240 tests**). In-memory SQLite for speed (queue =
   sync, so jobs run inline); app targets PostgreSQL; CI runs a Postgres migrate
   smoke.
 - Covered: audit log + append-only, PII redaction, AI-action & Task state
@@ -502,6 +517,11 @@ docker-compose.yml          # PostgreSQL 17 on host port 5434
   super_admin, re-seed revokes drift), and **reporting (rate denominators, the
   sample floor, rejection measured over reviewed-only, disagreement needing both
   analyses, median latency, compliance gauges, banner self-clearing)**.
+- **Filament widgets are LAZY Livewire components.** `get('/admin')` returns 200
+  with placeholders only, so an `assertOk()` smoke test proves the page boots and
+  nothing more — a widget can throw on every render and still pass. Assert widget
+  CONTENT via `Livewire::test(TheWidget::class)`, which is the only place its
+  output exists (`DashboardRenderTest`).
 - **CI:** `.github/workflows/ci.yml` — Pint + Pest (PHP 8.4 + 8.5 matrix) +
   Postgres migrate smoke on the real `pgvector/pgvector:pg17` image.
 - **Local engine verification (2026-07-16).** The suite runs on SQLite for speed,
@@ -543,10 +563,29 @@ docker-compose.yml          # PostgreSQL 17 on host port 5434
   need hands-on access to verify recording/callback payload shapes
   (`SonetelProvider` marked UNVERIFIED) and whether a call-completed callback exists
   (else a scheduled recording-poll job).
-- **Live AI *answering* the call — separate future decision.** Not buildable on
-  Sonetel. Options: confirm an undocumented Sonetel real-time tier; a SIP media
-  server (FreeSWITCH/Asterisk/Pipecat) behind Sonetel forwarding; or a second vendor
-  (Twilio/Telnyx) for that leg. Deferred until there's a real answer.
+- **Live AI *answering* the call — separate future decision. Deferred, not
+  blocked-on-ignorance.** Everything telephony sits behind `TelephonyProvider`
+  (today: `parseInboundWebhook` + `name`), so a new carrier is one class plus a
+  config line. Three shapes, recorded 2026-07-16 so they are not re-derived later:
+
+  | # | Shape | Unlocks | Costs |
+  |---|---|---|---|
+  | 1 | **Stay on Sonetel, no live AI** | Post-call analysis (shipped); AI-prepared scripts; human speaks | Nothing. Works today. |
+  | 2 | **Sonetel for numbers → self-hosted SIP media server** (FreeSWITCH / Asterisk / Pipecat) | Live AI **with voice data in the EU on infrastructure we own** | We become a telephony operator — real ops burden |
+  | 3 | **Move the live-AI leg to Twilio or Telnyx** | Live AI, managed | Both are **US** companies → a bigger GDPR transfer than any so far (live voice of identifiable Dutch prospects, not KB text) + AI Act Art. 50 disclosure |
+
+  On shape 3, the two differ in a way that matters here: **Twilio ConversationRelay**
+  gives a WebSocket for voice agents and has the better ecosystem/docs;
+  **Telnyx Conversation Relay streams transcribed TEXT** rather than raw audio
+  (they handle transport/STT/TTS), which maps onto our existing `ReceptionistLlm`
+  adapter almost directly and is the smaller integration. Caveat on the comparison
+  literature: most head-to-head latency/pricing claims are **Telnyx marketing about
+  Twilio** — directionally plausible, not independent.
+
+  **Sequencing (decided): shape → residency → carrier.** The shape depends on the
+  telemarketing answer (GO-LIVE-LEGAL Q2). Buying a carrier integration now would
+  spend real effort on a capability that may be legally off the table — and if the
+  answer is "AI-prepared script, human calls", Sonetel already does that.
 - **Database engine (decided):** MySQL → PostgreSQL while the cost was near-zero.
   Banks jsonb indexing (Phase 4/8); keeps pgvector a cheap future option.
 - **RAG storage, pgvector deferred:** embeddings in `jsonb`, brute-force cosine in
