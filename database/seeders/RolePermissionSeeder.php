@@ -140,6 +140,17 @@ class RolePermissionSeeder extends Seeder
             'sales_manager' => ['READ', 'WRITE'],
         ],
 
+        // --- Do-not-contact --------------------------------------------------
+        // A rep MUST be able to record an objection the second they are told —
+        // any friction here means someone gets called again, so Create is not a
+        // manager-level act. But no ARCHIVE and no Update for reps: releasing a
+        // suppression starts contact again, which is the consequential direction
+        // and belongs with a manager (and leaves a trail via release()).
+        'Suppression' => [
+            'sales_rep' => ['READ', 'Create'],
+            'sales_manager' => ['READ', 'Create', 'Update'],
+        ],
+
         // --- Role management ------------------------------------------------
         // super_admin only. This one is load-bearing: a manager who could grant
         // permissions could grant themselves anything, which would make every

@@ -33,6 +33,9 @@ class ImportCommitter
         }
 
         DB::transaction(function () use ($import) {
+            // Only Create/Match are ever written. Suppressed/Skip/Invalid rows are
+            // not "not yet" — they are decided, and committing must not revisit
+            // that decision.
             $import->rows()
                 ->whereIn('disposition', [ImportRowDisposition::Create->value, ImportRowDisposition::Match->value])
                 ->cursor()

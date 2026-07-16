@@ -45,6 +45,7 @@ class Import extends Model
         'match_count',
         'skip_count',
         'invalid_count',
+        'suppressed_count',
         'error',
         'created_by',
     ];

@@ -6,6 +6,7 @@ use App\Enums\ImportRowDisposition;
 use App\Enums\ImportStatus;
 use App\Models\Import;
 use App\Services\Receptionist\CompanyMatcher;
+use App\Services\SuppressionList;
 use Illuminate\Support\Facades\Storage;
 
 /**
@@ -17,7 +18,10 @@ use Illuminate\Support\Facades\Storage;
  */
 class CsvImporter
 {
-    public function __construct(private CompanyMatcher $matcher) {}
+    public function __construct(
+        private CompanyMatcher $matcher,
+        private SuppressionList $suppressions,
+    ) {}
 
     public function stage(Import $import): void
     {
@@ -26,7 +30,7 @@ class CsvImporter
         $mapping = $import->column_mapping ?: $this->autoMap($headers);
 
         $import->rows()->delete();
-        $counts = ['create' => 0, 'match' => 0, 'skip' => 0, 'invalid' => 0];
+        $counts = ['create' => 0, 'match' => 0, 'skip' => 0, 'invalid' => 0, 'suppressed' => 0];
 
         foreach ($records as $index => $record) {
             $assoc = array_combine($headers, $record);
@@ -51,6 +55,7 @@ class CsvImporter
             'match_count' => $counts['match'],
             'skip_count' => $counts['skip'],
             'invalid_count' => $counts['invalid'],
+            'suppressed_count' => $counts['suppressed'],
             'status' => ImportStatus::Previewed,
         ])->save();
     }
@@ -72,6 +77,21 @@ class CsvImporter
         }
         if ($email && ! filter_var($email, FILTER_VALIDATE_EMAIL)) {
             return [ImportRowDisposition::Invalid, null, ['email' => "Invalid email: {$email}"]];
+        }
+
+        // Before anything else worth doing: has this person told us to stop?
+        // Checked here rather than at commit so the rep SEES it in the preview
+        // and cannot commit a batch that would contact an objector.
+        $suppression = $this->suppressions->firstMatch(
+            phone: $mapped['phone'] ?? null,
+            email: $mapped['email'] ?? null,
+            domain: $mapped['domain'] ?? null,
+        );
+
+        if ($suppression !== null) {
+            return [ImportRowDisposition::Suppressed, null, [
+                'suppressed' => 'On the do-not-contact list ('.$suppression->type->value.', '.$suppression->source->getLabel().')',
+            ]];
         }
 
         $match = $this->matcher->match($name, $mapped['phone'] ?? null, $mapped['domain'] ?? null);

@@ -11,14 +11,21 @@ use Filament\Support\Contracts\HasLabel;
  */
 enum ImportRowDisposition: string implements HasColor, HasLabel
 {
-    case Create = 'create';   // new company
-    case Match = 'match';      // deduped onto an existing company
-    case Skip = 'skip';        // empty row
-    case Invalid = 'invalid';  // failed validation (e.g. no name)
+    case Create = 'create';        // new company
+    case Match = 'match';          // deduped onto an existing company
+    case Skip = 'skip';            // empty row
+    case Invalid = 'invalid';      // failed validation (e.g. no name)
+    // On the do-not-contact list. Its own disposition rather than a Skip: being
+    // told "never contact me again" is a decision someone made about us, and it
+    // should be visible in the preview, not lumped in with blank lines.
+    case Suppressed = 'suppressed';
 
     public function getLabel(): string
     {
-        return ucfirst($this->value);
+        return match ($this) {
+            self::Suppressed => 'Suppressed — do not contact',
+            default => ucfirst($this->value),
+        };
     }
 
     public function getColor(): string
@@ -28,6 +35,7 @@ enum ImportRowDisposition: string implements HasColor, HasLabel
             self::Match => 'info',
             self::Skip => 'gray',
             self::Invalid => 'danger',
+            self::Suppressed => 'danger',
         };
     }
 }

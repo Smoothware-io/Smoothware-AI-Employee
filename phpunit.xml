@@ -32,5 +32,26 @@
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>
+
+        <!--
+            Every external provider is PINNED to its offline fake, so the suite can
+            never reach a vendor even when .env holds real keys and real drivers.
+
+            This is not tidiness. Without it the suite inherits whatever the
+            developer happens to have enabled: the moment LLM_DRIVER=claude landed
+            in .env, tests started making REAL Claude calls — cost, latency, and
+            nondeterministic results — and two tests began failing for reasons that
+            had nothing to do with the code under test.
+
+            A test run must mean the same thing on every machine and in CI.
+        -->
+        <env name="LLM_DRIVER" value="fake"/>
+        <env name="ANALYSIS_LLM_DRIVER" value="fake"/>
+        <env name="WEBSITE_ANALYZER_DRIVER" value="fake"/>
+        <env name="TELEPHONY_DRIVER" value="fake"/>
+        <env name="TRANSCRIPTION_DRIVER" value="fake"/>
+        <env name="EMBEDDINGS_DRIVER" value="fake"/>
+        <env name="ANTHROPIC_API_KEY" value=""/>
+        <env name="VOYAGE_API_KEY" value=""/>
     </php>
 </phpunit>
