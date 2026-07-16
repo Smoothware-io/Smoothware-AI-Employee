@@ -49,9 +49,17 @@ class CallInstructionBuilder
 
         $sections = [];
 
-        // 1. Art. 50 — first, always, verbatim.
-        $sections[] = "OPENINGSREGEL — zeg dit als allereerste, woordelijk:\n"
-            .config('outbound.disclosure');
+        // 1. Art. 50 — first, always, before anything else.
+        //
+        // Delivered in the CALLER'S language rather than recited verbatim in
+        // Dutch: the obligation is that the person UNDERSTANDS they are talking to
+        // a machine, and Dutch at an English speaker fails that while looking
+        // compliant. The meaning is fixed; the language is not.
+        $sections[] = "OPENINGSREGEL — zeg dit als allereerste, vóór al het andere.\n"
+            ."Geef exact deze boodschap, in de taal van de gebelde persoon:\n\n"
+            .config('outbound.disclosure')
+            ."\n\nVerzwak of versnel dit nooit, en sla het nooit over — ook niet als "
+            .'de ander haast heeft.';
 
         // 2. Who we are and why we called.
         $sections[] = "WIE JE BENT\nJe belt namens Smoothware, een Nederlands web- en softwarebureau.";

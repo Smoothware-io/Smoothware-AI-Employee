@@ -53,5 +53,23 @@
         <env name="EMBEDDINGS_DRIVER" value="fake"/>
         <env name="ANTHROPIC_API_KEY" value=""/>
         <env name="VOYAGE_API_KEY" value=""/>
+
+        <!--
+            OUTBOUND IS PINNED OFF. Without this the suite inherits .env — and once
+            OUTBOUND_ENABLED=true and real OpenAI/Sonetel credentials were present,
+            a test that dialled without faking HTTP would have placed a REAL PHONE
+            CALL to a REAL PERSON from `php artisan test`.
+
+            It also made "dials nothing at all with the default configuration" fail,
+            which is the test whose entire job is proving the safe default is safe.
+            A test suite must describe the code, never the developer's .env.
+        -->
+        <env name="OUTBOUND_ENABLED" value="false"/>
+        <env name="OUTBOUND_TEST_NUMBERS" value=""/>
+        <env name="OUTBOUND_ALLOW_WITHOUT_REGISTER_SCREENING" value="false"/>
+        <env name="OUTBOUND_REGISTER_SCREENING" value="none"/>
+        <env name="OPENAI_API_KEY" value=""/>
+        <env name="OPENAI_PROJECT_ID" value=""/>
+        <env name="OPENAI_WEBHOOK_SECRET" value=""/>
     </php>
 </phpunit>

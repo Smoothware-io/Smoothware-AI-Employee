@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\ObserveRealtimeCall;
 use App\Models\Call;
 use App\Models\Company;
 use App\Services\EventLogger;
@@ -55,8 +56,11 @@ class OpenAiRealtimeWebhookController extends Controller
 
         [$fromNumber, $toNumber] = $this->numbersFrom((array) $request->input('data.sip_headers', []));
 
-        // Match the leg back to the call we placed, so the AI knows who it rang.
-        $call = $this->matchCall($fromNumber, $toNumber);
+        // Match the leg back to a call we placed. An INBOUND call has none — nobody
+        // dialled it — so one is created, or the transcript has nowhere to live.
+        $call = $this->matchCall($fromNumber, $toNumber)
+            ?? $this->recordInboundCall($fromNumber, $toNumber);
+
         $company = $call?->company;
 
         $built = $this->instructions->forCompany($company, $call?->objective ?? null);
@@ -100,6 +104,11 @@ class OpenAiRealtimeWebhookController extends Controller
             companyId: $company?->getKey(),
         );
 
+        // Ride along and write down what is said. Queued, because this webhook
+        // must answer in milliseconds while the observer holds a socket open for
+        // the whole conversation.
+        ObserveRealtimeCall::dispatch($callId, $call?->getKey());
+
         return response('ok', 200);
     }
 
@@ -142,6 +151,36 @@ class OpenAiRealtimeWebhookController extends Controller
         }
 
         return false;
+    }
+
+    /**
+     * Someone rang us and the AI is about to answer: that is a Call, and Phase 1
+     * already knows what a Call is. Matching it to a company is left to the
+     * existing receptionist pipeline — this only has SIP headers, and guessing a
+     * company from a caller ID here would duplicate CompanyMatcher badly.
+     */
+    private function recordInboundCall(?string $from, ?string $to): Call
+    {
+        return Call::create([
+            'direction' => 'inbound',
+            'status' => 'in_progress',
+            'from_number' => $this->numberFromSipUri($from),
+            'to_number' => $this->numberFromSipUri($to),
+            'external_provider' => 'openai-realtime',
+            'started_at' => now(),
+        ]);
+    }
+
+    /** "sip:+31612345678@host" -> "+31612345678" */
+    private function numberFromSipUri(?string $uri): ?string
+    {
+        if (! filled($uri)) {
+            return null;
+        }
+
+        preg_match('/sip:([^@;>]+)/i', (string) $uri, $matches);
+
+        return $matches[1] ?? mb_substr((string) $uri, 0, 60);
     }
 
     /** @return array{0: ?string, 1: ?string} */

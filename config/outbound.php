@@ -28,10 +28,16 @@ return [
     | EU AI Act Art. 50: a person must be told they are talking to a machine.
     | Prepended to the AI's instructions as the first thing it says — not buried,
     | not on request. No disclosure configured = no calls, by design.
+    |
+    | "KAN worden opgenomen", not "WORDT opgenomen". The AI must not state as fact
+    | something we have not built: audio capture is unproven, and a disclosure that
+    | over-claims is a lie told in the same breath as "I am an AI". If recording
+    | becomes certain, tighten this to the definite form — an honest promise is
+    | worth more than a vague one, but a false one is worth less than nothing.
     */
     'disclosure' => env(
         'OUTBOUND_DISCLOSURE',
-        'Je spreekt met een AI-assistent van Smoothware. Dit gesprek wordt opgenomen. Schikt het u om even te praten?',
+        'Je spreekt met een AI-assistent van Smoothware. Dit gesprek kan worden opgenomen. Schikt het u om even te praten?',
     ),
 
     /*
