@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Contacts\Schemas;
 
+use App\Enums\PreferredChannel;
 use App\Enums\RecordSource;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Select;
@@ -29,6 +30,12 @@ class ContactForm
                     ->email(),
                 TextInput::make('phone')
                     ->tel(),
+                Select::make('preferred_channel')
+                    ->label('Prefers to be contacted by')
+                    ->options(PreferredChannel::class)
+                    ->placeholder('Not stated')
+                    ->helperText('Leave blank unless they actually told us — a guess here would look like a stated preference.')
+                    ->native(false),
                 Select::make('source')
                     ->options(RecordSource::class)
                     ->default('manual')

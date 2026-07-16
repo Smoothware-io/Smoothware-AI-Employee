@@ -5,6 +5,7 @@ namespace App\Services\Import;
 use App\Enums\CompanyStatus;
 use App\Enums\ImportRowDisposition;
 use App\Enums\ImportStatus;
+use App\Enums\PreferredChannel;
 use App\Enums\RecordSource;
 use App\Jobs\GenerateCompanyAnalysis;
 use App\Models\Company;
@@ -16,7 +17,11 @@ use Illuminate\Support\Facades\DB;
 /**
  * Commits a previewed import (Phase 5): creates new companies / links matched
  * ones, adds contacts, applies the import defaults (owner/status/campaign/
- * industry), and queues a Phase-4 analysis for each NEW company. Imported records
+ * industry), and queues a Phase-4 analysis for each NEW company.
+ *
+ * Note: a `preferred_channel` hint lands on the CONTACT, so a row carrying one but
+ * no contact name has nowhere to put it and the hint is dropped — no person, no
+ * personal preference. Imported records
  * are tagged source=Import. Idempotent — only runs on a `previewed` import.
  */
 class ImportCommitter
@@ -71,6 +76,10 @@ class ImportCommitter
                 'first_name' => ($mapped['contact_first_name'] ?? null) ?: 'Unknown',
                 'last_name' => $mapped['contact_last_name'] ?? null,
                 'email' => $mapped['contact_email'] ?? null,
+                // Unrecognised free text normalises to null rather than a guess —
+                // inventing a preference the person never stated is worse than
+                // having none. See PreferredChannel::fromImport().
+                'preferred_channel' => PreferredChannel::fromImport($mapped['preferred_channel'] ?? null),
                 'source' => RecordSource::Import,
                 'created_by' => $import->created_by,
             ]);

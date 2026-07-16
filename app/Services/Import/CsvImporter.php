@@ -102,6 +102,7 @@ class CsvImporter
                 in_array($normalised, ['firstname', 'contactfirstname', 'contact'], true) => 'contact_first_name',
                 in_array($normalised, ['lastname', 'surname', 'contactlastname'], true) => 'contact_last_name',
                 in_array($normalised, ['contactemail'], true) => 'contact_email',
+                in_array($normalised, ['preferredchannel', 'preferredcontactmethod', 'contactpreference', 'channel', 'preference'], true) => 'preferred_channel',
                 default => null,
             };
 

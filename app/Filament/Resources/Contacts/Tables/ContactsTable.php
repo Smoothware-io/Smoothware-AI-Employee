@@ -40,6 +40,11 @@ class ContactsTable
                     ->icon('heroicon-m-phone')
                     ->copyable()
                     ->placeholder('—'),
+                TextColumn::make('preferred_channel')
+                    ->label('Prefers')
+                    ->badge()
+                    ->placeholder('— not stated')
+                    ->toggleable(),
                 TextColumn::make('source')
                     ->badge()
                     ->toggleable(),

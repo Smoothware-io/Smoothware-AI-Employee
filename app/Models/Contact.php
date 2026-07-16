@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Concerns\HasProvenance;
 use App\Concerns\LogsEvents;
+use App\Enums\PreferredChannel;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -15,6 +16,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * field is kept out of the append-only audit log.
  *
  * @property bool $is_decision_maker
+ * @property PreferredChannel|null $preferred_channel
  */
 class Contact extends Model
 {
@@ -30,12 +32,18 @@ class Contact extends Model
         'is_decision_maker',
         'email',
         'phone',
+        'preferred_channel',
         'source',
         'ai_action_id',
         'created_by',
     ];
 
     /**
+     * Identifying values stay out of the append-only log. `preferred_channel` is
+     * deliberately NOT redacted: it is a low-risk categorical, the event already
+     * names the contact by id, and the changed VALUE is the whole point of
+     * auditing a preference ("who set this to email, and when?").
+     *
      * @var array<int, string>
      */
     protected array $auditRedacted = ['first_name', 'last_name', 'email', 'phone'];
@@ -44,6 +52,7 @@ class Contact extends Model
     {
         return [
             'is_decision_maker' => 'boolean',
+            'preferred_channel' => PreferredChannel::class,
         ];
     }
 

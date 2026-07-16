@@ -78,6 +78,13 @@ and per-model PII redaction: **Company** (hub; tabbed detail page), **Contact**,
 - **Call** — metadata + Phase-3 recording/transcript columns.
   `transcript`/`summary` **encrypted at rest**; `CallContentEraser` destroys
   personal content but keeps metadata (GDPR right-to-erasure).
+- **`contacts.preferred_channel`** (`PreferredChannel`: phone / email / either,
+  **nullable**) — how a person prefers to be reached. On Contact, not Company: a
+  company has no preference, its people do, and a single company-level value would
+  be a fiction whenever two contacts disagree. Editable by hand and settable from
+  a CSV column during import (Phase 5); unrecognised source text normalises to
+  **null** rather than a guess. Null means *never stated* — there is no "unknown"
+  case and no default, so automation can't read "we never asked" as consent.
 
 **Timeline anchor:** `events.company_id` → a company's feed is one indexed query.
 **Human vs. AI (principle #2):** `RecordSource`/`ActorType` render as coloured
@@ -240,6 +247,24 @@ the *absence* of events, so it can't be pushed — a daily `EvaluateTimeBasedFol
 pulls it, measured against the Phase-1 timeline anchor (`events.company_id`), so
 there is no `last_activity_at` column to drift.
 
+**Channel routing (`contacts.preferred_channel`, §3).** Rules that decide *how* to
+reach out should read the contact's stated preference — e.g. route to a
+`send_email` task rather than a `call_back` task when they prefer email, and
+either when they said either. Use `PreferredChannel::allowsPhone()/allowsEmail()`
+rather than re-deriving the logic. Two constraints:
+
+- **A null preference is not permission for anything** — it means nobody asked.
+  Treat it as "no signal" and fall back to the rule's own `task_type`, never as
+  "either".
+- **The preference says HOW, never WHETHER.** Whether we may contact someone at
+  all is lawful basis + the right to object ([GO-LIVE-LEGAL](GO-LIVE-LEGAL.md)),
+  not this field. **Any future Phase 6 outbound work must read it the same way**:
+  a routing hint, not a consent record.
+
+Note this stays within the Phase 7 boundary — routing a task to "send email" tells
+a *human* to write one. **Auto-sending is still out of scope** and still opens the
+direct-marketing surface described above.
+
 **Guards.** A per-company/day cap (`followups.max_per_company_per_day`) stops a
 badly-written rule burying a rep; suppressed follow-ups are recorded as `skipped`,
 never silently dropped. Assignees resolve **at fire time**, so a rule written
@@ -349,7 +374,7 @@ app/
   Concerns/{LogsEvents,HasProvenance}.php
   Contracts/                # EmbeddingClient, TelephonyProvider, TranscriptionClient,
                             #   ReceptionistLlm, WebsiteAnalyzer, CompanyAnalysisLlm
-  Enums/                    # + CallIntent, AnalysisPriority, ImportStatus, ImportRowDisposition,
+  Enums/                    # + CallIntent, AnalysisPriority, PreferredChannel, ImportStatus, ImportRowDisposition,
                             #   LawfulBasis (GDPR Art. 6 basis per import), FollowUpTrigger,
                             #   FollowUpStatus, AssigneeStrategy
   Events/EventLogged.php    # the log announces; Phase 7 listens (backbone stays dumb)
@@ -375,12 +400,12 @@ database/{migrations,seeders,factories}/
 tests/Feature/              # + Receptionist*, InboundCallWebhook, CallRetentionPurge,
                            #   CompanyAnalysis, DisagreementDetector, CsvImport,
                            #   ImportProvenance, FollowUpAutomation, FollowUpRuleRbac,
-                           #   RolePermissionMatrix, PanelSmoke, ...
+                           #   RolePermissionMatrix, PreferredChannel, PanelSmoke, ...
 docker-compose.yml          # PostgreSQL 17 on host port 5434
 ```
 
 ## 12. Testing
-- Pest, `php artisan test` (**176 tests**). In-memory SQLite for speed (queue =
+- Pest, `php artisan test` (**195 tests**). In-memory SQLite for speed (queue =
   sync, so jobs run inline); app targets PostgreSQL; CI runs a Postgres migrate
   smoke.
 - Covered: audit log + append-only, PII redaction, AI-action & Task state
@@ -435,6 +460,18 @@ docker-compose.yml          # PostgreSQL 17 on host port 5434
   — real semantic/scan quality arrives with Voyage / the PageSpeed + Claude wiring.
 - **Transcript search vs. encryption** (Phase 3): encryption blocks SQL search;
   transcript search will use the object store / a dedicated index.
+- **WATCH — `Update:AiAction` is coarser than the intent (§9).** A rep needs
+  `Update` because that *is* approve/reject, but the permission technically also
+  covers editing an AI action's payload. **Not exploitable today**: the review
+  queue only exposes approve/reject, so there is no edit surface. Filament/Shield
+  permissions are per-verb, not per-field, so separating them would need a custom
+  ability or a dedicated approve endpoint. **Revisit the moment the review queue
+  grows any edit affordance** — at that point a rep could alter what the AI
+  proposed and then approve it, which would silently forge provenance.
+- **RBAC coverage is self-enforcing (§9).** `RolePermissionMatrixTest` compares
+  the matrix against the policy files on disk, so a new resource without an
+  explicit access decision fails CI rather than shipping as another
+  "only super_admin has permissions" hole.
 
 ---
 
