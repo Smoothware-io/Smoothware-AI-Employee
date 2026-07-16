@@ -2,6 +2,7 @@
 
 namespace App\Services\Outbound;
 
+use App\Enums\Language;
 use App\Models\Company;
 use App\Services\ContextVersion;
 use App\Services\KnowledgeRetriever;
@@ -120,6 +121,12 @@ class CallInstructionBuilder
         ]);
 
         $context = "WIE JE BELT\n".implode("\n", $facts);
+
+        // Language is per-company, and "we don't know" is a real answer: better to
+        // ask than to confidently address someone in the wrong language.
+        $language = $company->spokenLanguage();
+        $context .= "\n\nTAAL: ".($language?->instruction()
+            ?? 'Onbekend. Begin in het Nederlands en vraag welke taal zij prefereren.');
 
         // The AI's own analysis of their website — real findings, already measured.
         // This is what makes the call informed rather than a cold script.

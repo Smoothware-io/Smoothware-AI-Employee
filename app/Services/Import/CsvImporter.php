@@ -118,7 +118,15 @@ class CsvImporter
                 in_array($normalised, ['domain', 'website', 'url', 'web'], true) => 'domain',
                 in_array($normalised, ['email', 'emailaddress', 'companyemail'], true) => 'email',
                 in_array($normalised, ['phone', 'telephone', 'tel', 'phonenumber', 'mobile'], true) => 'phone',
-                in_array($normalised, ['industry', 'sector'], true) => 'industry',
+                in_array($normalised, ['industry', 'sector', 'branche'], true) => 'industry',
+                // Previously DROPPED even when the sheet had them. City and
+                // country are not decoration: country decides which telemarketing
+                // regime applies, and language decides whether the call is even
+                // comprehensible.
+                in_array($normalised, ['city', 'plaats', 'stad', 'location', 'locatie'], true) => 'city',
+                in_array($normalised, ['country', 'land', 'countrycode'], true) => 'country',
+                in_array($normalised, ['language', 'taal', 'lang'], true) => 'language',
+                in_array($normalised, ['jobtitle', 'title', 'functie', 'role', 'rol'], true) => 'contact_job_title',
                 in_array($normalised, ['firstname', 'contactfirstname', 'contact'], true) => 'contact_first_name',
                 in_array($normalised, ['lastname', 'surname', 'contactlastname'], true) => 'contact_last_name',
                 in_array($normalised, ['contactemail'], true) => 'contact_email',

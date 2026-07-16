@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Concerns\HasProvenance;
 use App\Concerns\LogsEvents;
 use App\Enums\CompanyStatus;
+use App\Enums\Language;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -17,6 +18,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * timeline is built from {@see timelineEvents()} (events anchored by company_id).
  *
  * @property CompanyStatus $status
+ * @property Language|null $language
  */
 class Company extends Model
 {
@@ -33,6 +35,7 @@ class Company extends Model
         'city',
         'postal_code',
         'country',
+        'language',
         'industry',
         'status',
         'owner_id',
@@ -54,6 +57,7 @@ class Company extends Model
     {
         return [
             'status' => CompanyStatus::class,
+            'language' => Language::class,
         ];
     }
 
@@ -61,6 +65,17 @@ class Company extends Model
     public function eventTimelineCompanyId(): ?int
     {
         return (int) $this->getKey();
+    }
+
+    /**
+     * The language to speak, or null if we genuinely do not know.
+     *
+     * A recorded language always wins over the country guess: `fromCountry()` is
+     * a fallback, not a fact.
+     */
+    public function spokenLanguage(): ?Language
+    {
+        return $this->language ?? Language::fromCountry($this->country);
     }
 
     // --- Relationships -----------------------------------------------------

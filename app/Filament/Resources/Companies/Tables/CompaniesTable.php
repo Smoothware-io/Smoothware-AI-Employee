@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Companies\Tables;
 
 use App\Enums\CompanyStatus;
+use App\Filament\Actions\CallWithAiAction;
 use App\Models\Company;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
@@ -39,7 +40,13 @@ class CompaniesTable
                     ->alignCenter(),
                 TextColumn::make('city')
                     ->toggleable()
-                    ->placeholder('—'),
+                    ->placeholder('—')
+                    ->description(fn (Company $record): ?string => $record->country),
+                TextColumn::make('language')
+                    ->label('Speaks')
+                    ->badge()
+                    ->placeholder('— will ask')
+                    ->toggleable(),
                 TextColumn::make('source')
                     ->badge()
                     ->label('Source'),
@@ -56,6 +63,10 @@ class CompaniesTable
             ->recordActions([
                 ViewAction::make(),
                 EditAction::make(),
+                // Phase 6. Visible only once outbound is enabled — a button that
+                // always refuses teaches people to ignore refusals.
+                CallWithAiAction::make()
+                    ->visible(fn (): bool => (bool) config('outbound.enabled')),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
