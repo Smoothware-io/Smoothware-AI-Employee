@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Enums\ActorType;
+use App\Events\EventLogged;
 use App\Models\Event;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Auth;
@@ -16,6 +17,11 @@ use Illuminate\Support\Facades\Auth;
  *   1. an authenticated user  -> ActorType::User
  *   2. otherwise (jobs, CLI)  -> ActorType::System
  * The AI layer passes ActorType::AiAgent explicitly.
+ *
+ * Every write dispatches {@see EventLogged}. That is the ONLY concession this
+ * class makes to downstream features: it announces, and never learns who is
+ * listening. Phase 7 follow-up automation consumes the log through that event
+ * rather than bolting hooks onto the models it watches.
  */
 class EventLogger
 {
@@ -65,7 +71,7 @@ class EventLogger
     ): Event {
         [$resolvedType, $resolvedId] = $this->resolveActor($actorType, $actorId);
 
-        return Event::create([
+        $event = Event::create([
             'entity_type' => $entityType,
             'entity_id' => $entityId,
             'company_id' => $companyId,
@@ -75,6 +81,12 @@ class EventLogger
             'payload' => $payload === [] ? null : $payload,
             'created_at' => now(),
         ]);
+
+        // Announce, don't act. Listeners (e.g. Phase 7 follow-up automation)
+        // subscribe; this backbone stays ignorant of who cares.
+        EventLogged::dispatch($event);
+
+        return $event;
     }
 
     /**
