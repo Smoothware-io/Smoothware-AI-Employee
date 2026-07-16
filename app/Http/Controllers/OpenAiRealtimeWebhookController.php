@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\CallDirection;
 use App\Jobs\ObserveRealtimeCall;
 use App\Models\Call;
 use App\Models\Company;
@@ -63,7 +64,11 @@ class OpenAiRealtimeWebhookController extends Controller
 
         $company = $call?->company;
 
-        $built = $this->instructions->forCompany($company, $call?->objective ?? null);
+        $built = $this->instructions->forCompany(
+            company: $company,
+            objective: $call?->objective ?? null,
+            direction: $call?->direction ?? CallDirection::Inbound,
+        );
 
         $accepted = Http::withToken((string) config('outbound.openai.key'))
             ->asJson()

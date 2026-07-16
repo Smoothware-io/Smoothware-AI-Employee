@@ -41,6 +41,20 @@ return [
     | signature verification before go-live — see SonetelProvider / the webhook
     | controller. Null = accept unauthenticated (dev only).
     */
+    /*
+    | What the AI says when it ANSWERS the phone (Art. 50 + recording notice).
+    |
+    | Separate from outbound.disclosure on purpose: that one announces a call and
+    | asks whether now is convenient, which is absurd said to someone who just
+    | dialled you. Same obligation, opposite conversation.
+    |
+    | "kan worden opgenomen" — never claim recording we have not proven.
+    */
+    'ai_disclosure' => env(
+        'RECEPTIONIST_AI_DISCLOSURE',
+        'U spreekt met de AI-assistent van Smoothware. Dit gesprek kan worden opgenomen. Waarmee kan ik u helpen?',
+    ),
+
     'webhook_secret' => env('TELEPHONY_WEBHOOK_SECRET'),
 
     /*

@@ -2,6 +2,7 @@
 
 namespace App\Services\Outbound;
 
+use App\Enums\CallDirection;
 use App\Enums\Language;
 use App\Enums\PreferredChannel;
 use App\Models\Company;
@@ -38,8 +39,18 @@ class CallInstructionBuilder
     /**
      * @return array{instructions: string, context_version: string}
      */
-    public function forCompany(?Company $company, ?string $objective = null): array
-    {
+    /**
+     * @param  CallDirection  $direction  who dialled whom. Every line below changes
+     *                                    with it: an AI that ANSWERS must not
+     *                                    announce a call, and an AI that CALLS must
+     *                                    not ask "how can I help you?".
+     */
+    public function forCompany(
+        ?Company $company,
+        ?string $objective = null,
+        CallDirection $direction = CallDirection::Outbound,
+    ): array {
+        $inbound = $direction === CallDirection::Inbound;
         $topic = $this->topic($company, $objective);
 
         $chunks = collect($this->retriever->retrieve($topic, 8))
@@ -56,13 +67,18 @@ class CallInstructionBuilder
         // a machine, and Dutch at an English speaker fails that while looking
         // compliant. The meaning is fixed; the language is not.
         $sections[] = "OPENINGSREGEL — zeg dit als allereerste, vóór al het andere.\n"
-            ."Geef exact deze boodschap, in de taal van de gebelde persoon:\n\n"
-            .config('outbound.disclosure')
+            .'Geef exact deze boodschap, in de taal van de '.($inbound ? 'beller' : 'gebelde persoon').":\n\n"
+            .($inbound ? config('receptionist.ai_disclosure') : config('outbound.disclosure'))
             ."\n\nVerzwak of versnel dit nooit, en sla het nooit over — ook niet als "
             .'de ander haast heeft.';
 
-        // 2. Who we are and why we called.
-        $sections[] = "WIE JE BENT\nJe belt namens Smoothware, een Nederlands web- en softwarebureau.";
+        // 2. Who we are, and which way this call goes.
+        $sections[] = $inbound
+            ? "WIE JE BENT\nJe NEEMT DE TELEFOON OP namens Smoothware, een Nederlands web- en "
+                .'softwarebureau. Deze persoon belt ONS — jij belt hen niet. Vraag waarmee je kunt '
+                .'helpen, luister, en beantwoord alleen wat je uit de kennisbank weet.'
+            : "WIE JE BENT\nJe BELT namens Smoothware, een Nederlands web- en softwarebureau. "
+                .'Jij hebt hen gebeld — respecteer hun tijd.';
 
         if ($company !== null) {
             $sections[] = $this->companyContext($company);
