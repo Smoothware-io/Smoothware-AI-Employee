@@ -59,7 +59,9 @@ class OutboundGate
             $blockers[] = 'Daily outbound cap reached ('.config('outbound.max_calls_per_day').').';
         }
 
-        foreach (['openai.project_id', 'openai.key', 'sonetel.token', 'sonetel.caller_id'] as $key) {
+        // Sonetel credentials are NOT config any more — they belong to the rep
+        // placing the call (see SonetelAccount). Only OpenAI is global.
+        foreach (['openai.project_id', 'openai.key'] as $key) {
             if (blank(config("outbound.{$key}"))) {
                 $blockers[] = "Missing configuration: outbound.{$key}";
             }

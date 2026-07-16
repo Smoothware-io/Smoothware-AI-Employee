@@ -84,12 +84,15 @@ return [
         'webhook_secret' => env('OPENAI_WEBHOOK_SECRET'),
     ],
 
-    'sonetel' => [
-        'token' => env('SONETEL_TOKEN'),
-        'account_id' => env('SONETEL_ACCOUNT_ID'),
-        // Shown to the person being called.
-        'caller_id' => env('SONETEL_CALLER_ID'),
-        'callback_url' => env('SONETEL_CALLBACK_URL', 'https://api.sonetel.com/make-calls/call/call-back'),
-    ],
+    /*
+    | Sonetel credentials are deliberately NOT here. Each rep connects their own
+    | account from their profile (sonetel_accounts), because the caller ID a
+    | prospect sees should belong to the person accountable for the call — and a
+    | token in .env expires after 24 hours, which would stop every call dead the
+    | next morning with no warning.
+    |
+    | Endpoints live in SonetelTokenService / SonetelDialer, verified against
+    | Sonetel's own SDK. Note auth and the API are on DIFFERENT hosts.
+    */
 
 ];

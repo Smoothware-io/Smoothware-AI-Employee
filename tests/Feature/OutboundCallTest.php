@@ -5,12 +5,16 @@ use App\Models\Call;
 use App\Models\Company;
 use App\Models\CompanyAiAnalysis;
 use App\Models\KnowledgeEntry;
+use App\Models\User;
 use App\Services\Outbound\CallInstructionBuilder;
 use App\Services\Outbound\OutboundGate;
 use App\Services\Outbound\SonetelDialer;
+use App\Services\Outbound\SonetelTokenService;
 use App\Services\SuppressionList;
 use Database\Seeders\SmoothwareKnowledgeSeeder;
 use Illuminate\Support\Facades\Http;
+
+use function Pest\Laravel\actingAs;
 
 /**
  * Outbound calling (Phase 6). The only feature here where a mistake reaches a
@@ -29,9 +33,6 @@ function configureOutbound(array $overrides = []): void
         'outbound.openai.project_id' => 'proj_test',
         'outbound.openai.key' => 'sk-test',
         'outbound.openai.sip_host' => 'sip.api.openai.com',
-        'outbound.sonetel.token' => 'tok_test',
-        'outbound.sonetel.caller_id' => '+31201234567',
-        'outbound.sonetel.callback_url' => 'https://api.sonetel.com/make-calls/call/call-back',
     ], $overrides));
 }
 
@@ -108,50 +109,77 @@ it('refuses once the daily cap is reached', function () {
 });
 
 it('refuses when the provider config is incomplete', function () {
-    configureOutbound(['outbound.sonetel.token' => '']);
+    // Only OpenAI is global config now — Sonetel belongs to the rep.
+    configureOutbound(['outbound.openai.project_id' => '']);
 
     expect(implode(' ', app(OutboundGate::class)->blockers('+31612345678')))
-        ->toContain('sonetel.token');
+        ->toContain('openai.project_id');
 });
 
 // --- The dialler ------------------------------------------------------------
 
 it('throws loudly rather than silently skipping a blocked call', function () {
     configureOutbound();
+    Http::fake(['https://api.sonetel.com/*' => Http::response(['access_token' => 'tok', 'expires_in' => 86400])]);
+
+    $user = User::factory()->create();
+    app(SonetelTokenService::class)->connect($user, 'a@b.nl', 'pw');
+    actingAs($user);
+
     app(SuppressionList::class)->suppress(SuppressionType::Phone, '+31612345678');
-    Http::fake();
 
     // A silent no-op looks like a bug and gets "fixed" by deleting the check.
     expect(fn () => app(SonetelDialer::class)->call('+31612345678'))
         ->toThrow(RuntimeException::class, 'Refusing to dial');
 
-    Http::assertNothingSent();
+    // The suppressed number was never dialled — only the auth call happened.
+    Http::assertNotSent(fn ($request) => str_contains($request->url(), 'call-back'));
 });
 
 it('bridges the OpenAI SIP leg to the prospect via Sonetel', function () {
     configureOutbound();
-    Http::fake(['api.sonetel.com/*' => Http::response(['call_id' => 'son_123'])]);
+    Http::fake([
+        'https://api.sonetel.com/*' => Http::response(['access_token' => 'tok', 'expires_in' => 86400]),
+        'https://public-api.sonetel.com/*' => Http::response(['call_id' => 'son_123']),
+    ]);
+
+    // A call is dialled AS a rep, using their connected account — see
+    // SonetelAccountTest for the request shape in full.
+    $user = User::factory()->create();
+    app(SonetelTokenService::class)->connect($user, 'a@b.nl', 'pw');
+    actingAs($user);
 
     $company = Company::factory()->create(['name' => 'Acme BV']);
     $call = app(SonetelDialer::class)->call('+31612345678', $company);
 
     Http::assertSent(function ($request) {
+        if (! str_contains($request->url(), 'call-back')) {
+            return true;
+        }
+
         // Leg 1 is the AI, leg 2 is the person. OpenAI cannot dial — it can only
         // receive SIP — so Sonetel bridges the two.
         return $request['call1'] === 'sip:proj_test@sip.api.openai.com;transport=tls'
-            && $request['call2'] === '+31612345678'
-            && $request['show2'] === '+31201234567';
+            && $request['call2'] === '+31612345678';
     });
 
     expect($call->direction->value)->toBe('outbound')
         ->and($call->status->value)->toBe('dialing')
         ->and($call->external_id)->toBe('son_123')
-        ->and($call->company_id)->toBe($company->id);
+        ->and($call->company_id)->toBe($company->id)
+        ->and($call->handled_by)->toBe($user->id);
 });
 
 it('marks the call failed when Sonetel refuses', function () {
     configureOutbound();
-    Http::fake(['api.sonetel.com/*' => Http::response(['error' => 'nope'], 402)]);
+    Http::fake([
+        'https://api.sonetel.com/*' => Http::response(['access_token' => 'tok', 'expires_in' => 86400]),
+        'https://public-api.sonetel.com/*' => Http::response(['error' => 'nope'], 402),
+    ]);
+
+    $user = User::factory()->create();
+    app(SonetelTokenService::class)->connect($user, 'a@b.nl', 'pw');
+    actingAs($user);
 
     expect(fn () => app(SonetelDialer::class)->call('+31612345678'))
         ->toThrow(RuntimeException::class, 'Sonetel refused');
