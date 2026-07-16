@@ -49,7 +49,7 @@ class ImportCommitter
                 'domain' => $mapped['domain'] ?? null,
                 'email' => $mapped['email'] ?? null,
                 'phone' => $mapped['phone'] ?? null,
-                'industry' => $mapped['industry'] ?: $import->default_industry,
+                'industry' => ($mapped['industry'] ?? null) ?: $import->default_industry,
                 'status' => $import->default_status ?: CompanyStatus::Lead->value,
                 'owner_id' => $import->default_owner_id,
                 'campaign_id' => $import->campaign_id,
@@ -68,7 +68,7 @@ class ImportCommitter
         if (! empty($mapped['contact_first_name']) || ! empty($mapped['contact_last_name'])) {
             Contact::create([
                 'company_id' => $company->id,
-                'first_name' => $mapped['contact_first_name'] ?: 'Unknown',
+                'first_name' => ($mapped['contact_first_name'] ?? null) ?: 'Unknown',
                 'last_name' => $mapped['contact_last_name'] ?? null,
                 'email' => $mapped['contact_email'] ?? null,
                 'source' => RecordSource::Import,

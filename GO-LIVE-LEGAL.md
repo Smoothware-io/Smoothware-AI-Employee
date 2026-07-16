@@ -31,6 +31,41 @@ flags across phase notes** — ARCHITECTURE.md §11 links here.
 
 ---
 
+## Named questions for counsel
+
+Two questions are **specific enough to answer** and are the current blockers. Take
+these to counsel as written — not "review our GDPR posture".
+
+### Q1 — Art. 14 notice for imported contacts: timing and format
+> We import B2B contact lists we did not collect from the data subject (purchased,
+> partner, or event lists). **Under GDPR Art. 14, by when and in what form must we
+> notify those individuals?** Specifically: (a) does the one-month outer limit
+> apply, or does "first communication" pull it earlier when the import is
+> immediately followed by outreach; (b) is a notice in our first outbound email
+> sufficient, or is a separate standalone notice required; (c) does the Art. 14(5)
+> **disproportionate-effort** exemption apply to lists of this size and type, and
+> if we rely on it, what must we publish instead; (d) what exactly must the notice
+> contain for our purposes (AI-assisted enrichment + CRM storage + outreach)?
+
+**Why it blocks:** the obligation attaches the moment the CSV lands, and nothing in
+our code prompts for it. → §2.
+
+### Q2 — ZZP'er / sole-trader classification for Dutch cold-calling
+> We sell to small Dutch businesses; a large share are **ZZP'ers / eenmanszaken**.
+> **Which of our targets count as "consumers"** for the Dutch cold-calling regime
+> (the consumer cold-calling prohibition and the *recht van verzet* / register
+> rules)? Specifically: (a) is a sole trader called on a business number for
+> business purposes a consumer for these rules; (b) does a KvK registration settle
+> it, or does it turn on the nature of the call; (c) **which register(s) must we
+> screen against, and how often**; (d) does the answer differ for the shapes we can
+> actually build (AI-prepared script + human caller vs. AI post-call analysis)?
+
+**Why it blocks:** it determines whether Phase 6 is "normal B2B outreach" or
+"regulated consumer telemarketing", and that changes the build, not just the
+paperwork. → §3.
+
+---
+
 ## 1. Call recording — consent & retention (Phase 3)
 
 **Built.** Retention is config-driven (`config/receptionist.php`), with a **90-day
@@ -70,10 +105,11 @@ is written without a human acting.
       not automatic — it must be *necessary* and *proportionate*, and generally
       calls for a recorded **LIA (Legitimate Interest Assessment)** balancing our
       interest against the data subject's rights.
-- [ ] **Art. 14 notice obligation.** Where personal data was **not obtained from
-      the data subject**, they must generally be informed — typically within one
-      month, or at first communication. This is the one most easily missed on an
-      import, and it applies the moment the CSV lands.
+- [ ] **Art. 14 notice obligation** — **see Q1 (named question for counsel).**
+      Where personal data was **not obtained from the data subject**, they must
+      generally be informed — typically within one month, or at first
+      communication. This is the one most easily missed on an import, and it
+      applies the moment the CSV lands.
 - [ ] **Right to object.** Must be honoured and must be easy — especially where
       legitimate interest is the basis, and absolutely for direct marketing
       (Art. 21(2), where objection is **absolute**, no balancing).
@@ -83,10 +119,17 @@ is written without a human acting.
       data; `eva.bloom@company.nl` and a named contact **are** — the import creates
       both, and they are not equivalent under GDPR.
 
-**Engineering follow-ups implied (not yet built):**
-- [ ] Record the **source/provenance and lawful basis per import batch** (a field
-      on `imports`, not a sticky note) — currently we capture *that* it was
-      imported, not *where it came from* or *under what basis*.
+**Engineering follow-ups:**
+- [x] **Record source/provenance + lawful basis per import batch.** *Built
+      2026-07-16:* `imports.list_source`, `imports.lawful_basis` (a `LawfulBasis`
+      enum of the Art. 6 bases), `imports.lawful_basis_notes`. Both are **required
+      in the upload form, asked before the import runs**; the notes field becomes
+      required when the chosen basis carries an assessment burden (legitimate
+      interest / other). Columns are **nullable in the DB on purpose** — pre-existing
+      imports have no answer, and backfilling a default would fabricate a lawful
+      basis. A company traces back via `import_rows.company_id` → `imports`.
+      An import whose basis needs an assessment but records no reasoning is
+      **flagged in the UI** — that state looks answered but isn't.
 - [ ] A **suppression / do-not-contact list** honoured by import and by outbound.
 - [ ] **Subject-level erasure** spanning a contact + all their calls (already a
       known gap in ARCHITECTURE §11).
@@ -113,11 +156,12 @@ must be cleared.
         telemarketing rules apply.
       - *AI analyses recordings of human-made calls post-hoc* — closest to the
         Phase 3 model already shipped.
-- [ ] **B2B telemarketing rules (NL).** The Dutch **recht van verzet** / register
-      regime and the ACM's rules on cold calling — including the significant
-      tightening of consumer cold-calling — and precisely **which of our targets
-      are legally "consumers"** (a sole trader / **ZZP'er** may be treated as one;
-      this is a real trap for a B2B agency selling to small businesses).
+- [ ] **B2B telemarketing rules (NL)** — **see Q2 (named question for counsel).**
+      The Dutch **recht van verzet** / register regime and the ACM's rules on cold
+      calling — including the significant tightening of consumer cold-calling — and
+      precisely **which of our targets are legally "consumers"** (a sole trader /
+      **ZZP'er** may be treated as one; this is a real trap for a B2B agency
+      selling to small businesses).
 - [ ] **Caller-ID and identification duties** — who we must say we are, and when.
 - [ ] **Opt-out handling on the call** and its propagation back into the CRM.
 - [ ] **Interaction with §2** — a prospect imported under legitimate interest and
@@ -186,8 +230,8 @@ weight (§3: AI disclosure) and is **not** a Phase 6 implementation detail.
 | # | Item | Phase | Status |
 |---|---|---|---|
 | 1 | Call recording consent wording + retention period | 3 | ⛔ Placeholder (90d) — needs sign-off |
-| 2 | Lawful basis + Art. 14 notice for imported B2B contacts | 5 | ⛔ Undocumented |
-| 3 | Outbound telemarketing rules + chosen outbound shape | 6 | ⛔ Blocks Phase 6 design |
+| 2 | Lawful basis + Art. 14 notice for imported B2B contacts | 5 | ⛔ **Q1** with counsel. Recording mechanism built; the *answer* is outstanding |
+| 3 | Outbound telemarketing rules + chosen outbound shape | 6 | ⛔ **Q2** with counsel. Blocks Phase 6 design |
 
 **None of the three is cleared. Do not flip any of the related features to
 production against real people until the corresponding row is signed off.**

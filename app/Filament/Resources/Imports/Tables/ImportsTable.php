@@ -29,6 +29,19 @@ class ImportsTable
                 TextColumn::make('skip_count')->label('Skip')->alignCenter()->color('gray'),
                 TextColumn::make('invalid_count')->label('Invalid')->alignCenter()->color('danger'),
                 TextColumn::make('campaign.name')->label('Campaign')->placeholder('—')->toggleable(),
+                TextColumn::make('lawful_basis')
+                    ->label('Basis')
+                    ->badge()
+                    ->placeholder('— not recorded')
+                    // A basis that needs an assessment but has no reasoning recorded
+                    // is worse than a blank one: it looks answered. Say so in the list.
+                    ->tooltip(fn (Import $record): ?string => $record->hasUnjustifiedBasis()
+                        ? 'Requires a recorded assessment — none given'
+                        : null)
+                    ->icon(fn (Import $record): ?string => $record->hasUnjustifiedBasis()
+                        ? 'heroicon-o-exclamation-triangle'
+                        : null)
+                    ->toggleable(),
                 TextColumn::make('created_at')->dateTime('d M Y, H:i')->sortable(),
             ])
             ->recordActions([

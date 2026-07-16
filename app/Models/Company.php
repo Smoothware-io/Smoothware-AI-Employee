@@ -105,6 +105,16 @@ class Company extends Model
         return $this->hasMany(Call::class);
     }
 
+    /**
+     * The import row(s) this company came from — the audit path back to a list's
+     * source and lawful basis (`$company->importRows->first()->import`).
+     * See GO-LIVE-LEGAL.md item #2.
+     */
+    public function importRows(): HasMany
+    {
+        return $this->hasMany(ImportRow::class);
+    }
+
     /** Human-owned analysis (Phase 4) — one per company; AI never writes here. */
     public function manualAnalysis(): HasOne
     {

@@ -6,7 +6,9 @@ stays legible as it grows.
 
 > **Status:** Phases 0 (+ hardening), 1 (Core CRM), 2 (Knowledge Base + RAG),
 > 3 (AI Receptionist — post-call shadow mode), 4 (Company Analysis), and
-> **5 (CSV Import) complete.** Phase 6 (AI Sales Representative — outbound) next.
+> **5 (CSV Import) complete.** **Phase 7 (Follow-up Automation) next** — Phase 6
+> (outbound) is deferred: not buildable as briefed on Sonetel, and gated on
+> telemarketing sign-off. See [`GO-LIVE-LEGAL.md`](GO-LIVE-LEGAL.md).
 
 ---
 
@@ -178,6 +180,15 @@ nothing is created until a rep reviews the preview and commits.
 - **Campaigns** (`campaigns`) — an optional grouping stamped on imported companies
   (`companies.campaign_id`) so a batch stays attributable.
 
+**Import provenance (GDPR).** Each batch records **where the list came from**
+(`list_source`) and **under which Art. 6 lawful basis** we process it
+(`lawful_basis`, a `LawfulBasis` enum, + `lawful_basis_notes` for the LIA
+reference). Both are asked **in the upload form, before the import runs** — the
+question is unavoidable at the moment someone loads other people's personal data.
+Nullable in the DB on purpose: a default would fabricate a basis. A company traces
+back via `import_rows.company_id` → `imports`. See
+[`GO-LIVE-LEGAL.md`](GO-LIVE-LEGAL.md) item #2.
+
 Provenance holds throughout: imported companies are `RecordSource::Import`, visibly
 distinct from `manual` / `ai` / `system`. Stage/commit are queued jobs
 (`StageImport` / `CommitImport`); the Filament actions dispatch them synchronously
@@ -204,7 +215,8 @@ app/
   Concerns/{LogsEvents,HasProvenance}.php
   Contracts/                # EmbeddingClient, TelephonyProvider, TranscriptionClient,
                             #   ReceptionistLlm, WebsiteAnalyzer, CompanyAnalysisLlm
-  Enums/                    # + CallIntent, AnalysisPriority, ImportStatus, ImportRowDisposition
+  Enums/                    # + CallIntent, AnalysisPriority, ImportStatus, ImportRowDisposition,
+                            #   LawfulBasis (GDPR Art. 6 basis per import)
   Http/Controllers/InboundCallWebhookController.php
   Jobs/                     # EmbedKnowledgeEntry, ProcessInboundCall, PurgeExpiredCallContent,
                             #   GenerateCompanyAnalysis, StageImport, CommitImport
@@ -220,12 +232,13 @@ app/
 config/{receptionist,analysis}.php   # grounding, retention (placeholder), driver switches
 database/{migrations,seeders,factories}/
 tests/Feature/              # + Receptionist*, InboundCallWebhook, CallRetentionPurge,
-                           #   CompanyAnalysis, DisagreementDetector, CsvImport, PanelSmoke, ...
+                           #   CompanyAnalysis, DisagreementDetector, CsvImport,
+                           #   ImportProvenance, PanelSmoke, ...
 docker-compose.yml          # PostgreSQL 17 on host port 5434
 ```
 
 ## 10. Testing
-- Pest, `php artisan test` (**85 tests**). In-memory SQLite for speed (queue =
+- Pest, `php artisan test` (**90 tests**). In-memory SQLite for speed (queue =
   sync, so jobs run inline); app targets PostgreSQL; CI runs a Postgres migrate
   smoke.
 - Covered: audit log + append-only, PII redaction, AI-action & Task state
@@ -233,8 +246,10 @@ docker-compose.yml          # PostgreSQL 17 on host port 5434
   ruleset activation, receptionist grounding + fallback + citation validation,
   inbound webhook, approve/reject (Livewire), company analysis (provenance,
   AI-never-touches-manual, regenerate history) + disagreement detection,
-  **CSV import (auto-map + dispositions, commit defaults/dedup/contacts/queued
-  analysis, idempotency)**, and a UI render smoke across every resource page.
+  CSV import (auto-map + dispositions, commit defaults/dedup/contacts/queued
+  analysis, idempotency, optional-column omission), **import provenance (list
+  source + lawful basis, company→import trace, unjustified-basis flag)**, and a UI
+  render smoke across every resource page.
 - **CI:** `.github/workflows/ci.yml` — Pint + Pest + Postgres migrate.
 
 ---
@@ -286,6 +301,6 @@ docker-compose.yml          # PostgreSQL 17 on host port 5434
 | 3 | AI Receptionist (post-call shadow mode; approve → apply) | ✅ Done |
 | 4 | Company Analysis (manual vs. AI, disagreement flags) | ✅ Done |
 | 5 | CSV Import (map → preview/dedup → create → queue analysis) | ✅ Done |
-| 6 | AI Sales Representative (outbound) | ⬜ Next |
-| 7 | Follow-up Automation | ⬜ |
+| 7 | Follow-up Automation | ⬜ **Next** |
 | 8 | Reporting (business + AI ops) | ⬜ |
+| 6 | AI Sales Representative (outbound) | ⛔ **Deferred** — blocked on the telephony constraint (§11) + telemarketing sign-off ([GO-LIVE-LEGAL](GO-LIVE-LEGAL.md) item #3). Phases 7–8 run first. |

@@ -35,6 +35,35 @@ function stagedImport(array $overrides = []): Import
     return $import->fresh();
 }
 
+/**
+ * Regression: the committer used `$mapped['industry'] ?: ...` (not `??`), so a CSV
+ * lacking an optional column threw "Undefined array key". The original fixture
+ * happened to include every column, which hid it. A name-only CSV is a normal
+ * shape, not an edge case.
+ */
+it('commits a CSV that omits every optional column', function () {
+    Storage::fake('local');
+    Storage::disk('local')->put('imports/minimal.csv', implode("\n", [
+        'name',
+        'Minimal BV',
+    ]));
+
+    $import = Import::factory()->create([
+        'path' => 'imports/minimal.csv',
+        'default_industry' => 'Fallback Industry',
+    ]);
+    app(CsvImporter::class)->stage($import);
+    app(ImportCommitter::class)->commit($import->refresh());
+
+    $company = Company::firstWhere('name', 'Minimal BV');
+
+    expect($import->refresh()->status)->toBe(ImportStatus::Completed)
+        ->and($company)->not->toBeNull()
+        ->and($company->industry)->toBe('Fallback Industry')  // default applies
+        ->and($company->domain)->toBeNull()
+        ->and($company->contacts()->count())->toBe(0);        // no names -> no contact
+});
+
 it('stages rows with create / match / skip / invalid dispositions and auto-maps columns', function () {
     $import = stagedImport();
 
