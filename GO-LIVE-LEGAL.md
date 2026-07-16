@@ -27,7 +27,7 @@ engineering decisions and have not been defaulted.
 | **Gate** | What must be true before the related feature is enabled in production. |
 
 Update this file whenever a phase adds a legal surface. **Do not scatter legal
-flags across phase notes** — ARCHITECTURE.md §13 links here.
+flags across phase notes** — ARCHITECTURE.md §14 links here.
 
 ---
 
@@ -132,7 +132,7 @@ is written without a human acting.
       **flagged in the UI** — that state looks answered but isn't.
 - [ ] A **suppression / do-not-contact list** honoured by import and by outbound.
 - [ ] **Subject-level erasure** spanning a contact + all their calls (already a
-      known gap in ARCHITECTURE §13).
+      known gap in ARCHITECTURE §14).
 
 **Gate:** ⛔ Do not import real purchased/third-party lists until the basis is
 documented and the Art. 14 notice path exists.

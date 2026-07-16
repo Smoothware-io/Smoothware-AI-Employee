@@ -3,6 +3,9 @@
 use App\Enums\AnalysisPriority;
 use App\Enums\ImportRowDisposition;
 use App\Enums\ImportStatus;
+use App\Filament\Widgets\ProviderStatusBanner;
+use App\Models\AiAction;
+use App\Models\AiRun;
 use App\Models\Call;
 use App\Models\Company;
 use App\Models\CompanyAiAnalysis;
@@ -72,6 +75,34 @@ it('renders an import preview page with staged rows', function () {
     ]);
 
     get("/admin/imports/{$import->getKey()}")->assertOk();
+});
+
+it('renders the dashboard with the reporting widgets and the demo-data banner', function () {
+    // Real-ish data so the widgets exercise their queries rather than empty paths.
+    $company = Company::factory()->create();
+    CompanyManualAnalysis::factory()->for($company)->create(['priority' => AnalysisPriority::High]);
+    CompanyAiAnalysis::factory()->for($company)->create(['inferred_priority' => AnalysisPriority::Low]);
+    AiRun::factory()->count(3)->create();
+    AiAction::factory()->rejected()->create();
+    Import::factory()->create(['status' => ImportStatus::Completed, 'lawful_basis' => null]);
+
+    get('/admin')->assertOk();
+});
+
+it('shows the demo-data banner only while providers are fakes', function () {
+    // The banner reads live driver config, so it must clear itself rather than
+    // needing someone to remember to delete it.
+    expect(ProviderStatusBanner::canView())->toBeTrue();
+
+    config([
+        'receptionist.drivers.llm' => 'claude',
+        'receptionist.drivers.telephony' => 'sonetel',
+        'analysis.drivers.llm' => 'claude',
+        'analysis.drivers.website' => 'http',
+        'services.embeddings.driver' => 'voyage',
+    ]);
+
+    expect(ProviderStatusBanner::canView())->toBeFalse();
 });
 
 it('renders the follow-up ledger with a fired follow-up', function () {

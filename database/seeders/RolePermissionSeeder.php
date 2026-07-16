@@ -18,7 +18,7 @@ use Spatie\Permission\PermissionRegistrar;
  * so the matrix is durable here. The policies stay as Shield writes them: pure
  * `$user->can('Verb:Entity')` checks.
  *
- * This is the executable source of truth; ARCHITECTURE.md §9 explains the
+ * This is the executable source of truth; ARCHITECTURE.md §10 explains the
  * reasoning. Tests iterate {@see MATRIX} directly, so the two cannot drift
  * silently: adding an entity without deciding its access fails the suite.
  *

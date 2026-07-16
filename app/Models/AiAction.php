@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\AiActionStatus;
 use App\Services\AiActionService;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
@@ -23,7 +24,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  */
 class AiAction extends Model
 {
-    use SoftDeletes;
+    use HasFactory, SoftDeletes;
 
     /** Smoothware soft-delete convention. */
     const DELETED_AT = 'archived_at';

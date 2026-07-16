@@ -6,9 +6,10 @@ stays legible as it grows.
 
 > **Status:** Phases 0 (+ hardening), 1 (Core CRM), 2 (Knowledge Base + RAG),
 > 3 (AI Receptionist — post-call shadow mode), 4 (Company Analysis), and
-> 5 (CSV Import), and **7 (Follow-up Automation) complete.** **Phase 8 (Reporting)
-> next** — Phase 6 (outbound) is deferred: not buildable as briefed on Sonetel, and
-> gated on telemarketing sign-off. See [`GO-LIVE-LEGAL.md`](GO-LIVE-LEGAL.md).
+> 5 (CSV Import), 7 (Follow-up Automation), and **8 (Reporting) complete.**
+> **Phase 6 (outbound) is the only one left, and is deferred** — not buildable as
+> briefed on Sonetel, and gated on telemarketing sign-off. See
+> [`GO-LIVE-LEGAL.md`](GO-LIVE-LEGAL.md).
 
 ---
 
@@ -18,11 +19,11 @@ stays legible as it grows.
 |---|---|---|
 | Framework | **Laravel 13** (PHP **8.4+** floor; dev + CI also on 8.5) | Mature, relational, batteries-included. |
 | Admin/UI | **Filament 5** (TALL: Tailwind, Alpine, Livewire) | A CRM/admin-panel engine. Server-rendered; no separate SPA. Badge theming makes "AI data looks different from human data" straightforward. |
-| Database | **PostgreSQL 17** (via Docker Compose) | Fits the relational model; jsonb for KB/analysis JSON; pgvector available but deferred (§13). |
+| Database | **PostgreSQL 17** (via Docker Compose) | Fits the relational model; jsonb for KB/analysis JSON; pgvector available but deferred (§14). |
 | Auth & RBAC | **spatie/laravel-permission** + **Filament Shield** | Roles + per-resource policies. |
 | AI reasoning | **Anthropic Claude API** — Opus 4.8 / Haiku 4.5 | Generation only (no embeddings). Structured outputs for receptionist + analysis. |
 | Embeddings | **Voyage AI** (prod) / offline fake (dev/test) | Separate provider because Claude has no embeddings API. Swappable via `EmbeddingClient`. |
-| Telephony | **Sonetel** (Dutch number) | Phase 3, **POST-CALL**. Recording API (download after the call) — **no live media streaming** (§13). |
+| Telephony | **Sonetel** (Dutch number) | Phase 3, **POST-CALL**. Recording API (download after the call) — **no live media streaming** (§14). |
 | Background jobs | **Laravel Queue** (database driver → Redis/Horizon later) | Embeddings, transcription, receptionist analysis, company analysis, retention purge, CSV stage/commit. Run `php artisan queue:work`. |
 | Tests | **Pest 4** | Risky/stateful logic (state machines, RAG, grounding, disagreement, import dedup, RBAC, PII, UI render). |
 | Formatting | **Laravel Pint** | |
@@ -41,7 +42,7 @@ Four pillars built **once as infrastructure** and reused by every later phase.
   `php artisan shield:generate --all --panel=admin` after adding resources** — it
   creates them and assigns them to `super_admin` (the admin "bypass" is
   permission-assignment, not a gate). What `sales_manager` / `sales_rep` may do is
-  the **access-control matrix in §9** — then re-run `db:seed --class=RolePermissionSeeder`.
+  the **access-control matrix in §10** — then re-run `db:seed --class=RolePermissionSeeder`.
 - `User::canAccessPanel()` = active user + at least one role.
 
 ### 2.2 Universal event log — the backbone
@@ -55,7 +56,7 @@ Four pillars built **once as infrastructure** and reused by every later phase.
 
 ### 2.3 Soft delete everywhere
 - **`archived_at`** (not `deleted_at`) + `SoftDeletes`. Archive, never
-  hard-delete — except for GDPR erasure (§13).
+  hard-delete — except for GDPR erasure (§14).
 
 ### 2.4 AI action framework ("AI proposes → human approves → executes")
 - `ai_actions` + `AiActionService`. Lifecycle: `draft → approved → (applied)`,
@@ -101,7 +102,7 @@ badges (AI = amber); `ai_action_id` links any AI row to its approval record.
   `PromptRuleSetService.activate()` archives the prior version, audited.
 - **RAG pipeline:** `EmbeddingClient` (`Fake` / `Voyage`) → `KnowledgeChunker` →
   **`EmbedKnowledgeEntry`** queued job → `KnowledgeRetriever` (brute-force cosine
-  over published chunks, fine for a small KB, §13; top-K + scores).
+  over published chunks, fine for a small KB, §14; top-K + scores).
 - **`source_context_version`** — `ContextVersion::current()` →
   `rules:v{N}|kb:{timestamp}`, stamped on every AI record.
 
@@ -120,7 +121,7 @@ approval — **nothing is auto-created**. Reuses Phase 0 (`ai_actions`) + Phase 
 real-time media-streaming API; its Recording API downloads recordings *after* the
 call. Flow: call handled live by Sonetel IVR/voicemail/a human → recorded → we
 pull, transcribe, and draft. **"Live AI answering the call" is out of scope on
-Sonetel — §13.**
+Sonetel — §14.**
 
 **Adapters + offline fakes** (no vendor account, no API calls in CI):
 `TelephonyProvider` (`Sonetel`, UNVERIFIED shapes / `Fake`), `TranscriptionClient`
@@ -135,7 +136,7 @@ Approve runs `ReceptionistActionApplier` (creates AI-tagged Company via
 `CompanyMatcher` dedup / Contact / Note / Task, links the call, atomic).
 
 **GDPR:** consent + retention are config-driven (`config/receptionist.php`, 90-day
-placeholder) + daily `PurgeExpiredCallContent`; real values need legal sign-off (§13).
+placeholder) + daily `PurgeExpiredCallContent`; real values need legal sign-off (§14).
 
 ---
 
@@ -280,7 +281,66 @@ the tripwire.
 
 ---
 
-## 9. Access control — the permission matrix
+---
+
+## 9. Phase 8 — Reporting
+
+Two audiences with genuinely different questions, and conflating them was the main
+design risk:
+
+- **Business** — is the pipeline healthy? (`PipelineOverview`)
+- **AI ops** — is the AI trustworthy? (`AiTrustPanel`)
+
+The second is the one this project actually needs. **It is the instrument panel
+behind principle #4 — "earn autonomy".** You cannot responsibly decide the
+receptionist is good enough to auto-apply without knowing how often it falls back
+and how often humans reject what it proposes. Phase 8 is what makes that an
+evidence-based decision instead of a vibe.
+
+**No new tables. Live queries only.** Every metric derives from what already
+exists: `events`, `ai_runs`, `ai_actions`, `company_*_analyses`, `follow_ups`,
+`imports`, `companies`, `tasks`. A pre-aggregated rollup would be a second source
+of truth that eventually drifts from the events it summarises — and on a dashboard
+whose purpose is measuring AI trustworthiness, a metric that is quietly **wrong**
+is worse than a query that is quietly **slow**. This is also the reversible
+direction: if these queries ever hurt, caching or a materialised view goes on top
+as an additive step. Measure first. (The Phase 0 event log was built as "the
+backbone"; this is the phase where that pays.)
+
+**Rates carry their denominators.** `Metric` (numerator + denominator) refuses to
+render a percentage below `reporting.min_sample` — "4% fallback" over 5 calls is
+noise, and a dashboard that prints confident-looking precision over a tiny sample
+actively misleads. Below the floor it shows `1/5` and says the sample is too small.
+Two related choices: **rejection rate is measured over REVIEWED actions**, not all
+actions (counting the pending backlog would drag the rate toward zero and make the
+AI look better the bigger the queue got); **disagreement rate counts only companies
+with BOTH analyses** (an AI analysis with no human counterpart is silence, not
+agreement). Latency is a **median** — one timeout would wreck a mean.
+
+**Compliance is a gauge, not a checklist item.** `ComplianceGauges` surfaces
+imports with no lawful basis and bases needing an assessment with no reasoning
+recorded — [GO-LIVE-LEGAL](GO-LIVE-LEGAL.md) item #2, visible on the dashboard
+rather than buried in a document. It also shows follow-ups suppressed by the cap,
+which is how a misconfigured rule becomes visible instead of quietly noisy.
+
+**The demo-data banner.** While any adapter is an offline fake, the AI numbers
+describe our stubs rather than the world, so `ProviderStatusBanner` says so.
+`ProviderStatus` reads the **same config keys `AppServiceProvider` binds on**, so
+the warning **clears itself** as each real provider is wired instead of rotting
+into a stale banner nobody remembers to delete. Without it, a screenshot of a green
+"2% fallback rate" would be read as a KPI by someone who wasn't in the room.
+
+**Access** follows §10 — no per-owner filtering, every authenticated user sees the
+same numbers, widget visibility from the existing entity permissions. Both roles
+can already read `AiRun`/`AiAction`, so reps see the AI-ops panel: a rep who can
+see the fallback rate has context for *why* the AI handed them a call.
+
+**Scope note:** built as widgets on the single Dashboard rather than a separate
+AI Ops page as originally proposed. With both roles seeing the same data there was
+no access reason to split, and one page with clear headings beats an extra route
+at this size.
+
+## 10. Access control — the permission matrix
 
 Three roles: **`super_admin`** ("Admin"), **`sales_manager`**, **`sales_rep`**.
 Shield generates 12 permissions per entity (`Verb:Entity`) across **15 entities**
@@ -368,7 +428,7 @@ resources — a different mechanism.
 > — not a rebuild:** the matrix stays as-is and scopes narrow what a permitted
 > user sees. Nothing in the current design forecloses that.
 
-## 10. Cross-cutting conventions (every new table/model)
+## 11. Cross-cutting conventions (every new table/model)
 
 - `id`, `created_at`, `updated_at`, `archived_at` unless append-only.
 - `created_by` / `owner_id` on user-authored data.
@@ -380,7 +440,7 @@ resources — a different mechanism.
   (`EmbeddingClient`, `TelephonyProvider`, `TranscriptionClient`, `ReceptionistLlm`,
   `WebsiteAnalyzer`, `CompanyAnalysisLlm`) — build + test with no vendor account.
 
-## 11. Key paths
+## 12. Key paths
 
 ```
 app/
@@ -402,23 +462,28 @@ app/
   Services/                 # EventLogger, AiActionService, CallContentEraser, Knowledge*, ContextVersion,
                             #   Embeddings/*, Telephony/*, Receptionist/*, Analysis/{CompanyAnalyzer,
                             #   DisagreementDetector, Fake/Http WebsiteAnalyzer, Fake/Claude AnalysisLlm},
-                            #   Import/{CsvImporter, ImportCommitter}, FollowUps/FollowUpEvaluator
+                            #   Import/{CsvImporter, ImportCommitter}, FollowUps/FollowUpEvaluator,
+                            #   Reporting/{BusinessMetrics, AiTrustMetrics, Metric, ProviderStatus}
+  Filament/Widgets/         # ProviderStatusBanner (demo-data), PipelineOverview,
+                            #   AiTrustPanel, ComplianceGauges -> the Dashboard
   Filament/Resources/       # CRM [nav] + AiAction(review)/AiRun [AI Receptionist nav] +
                             #   Import/Campaign [Import nav]; Company form has an inline
                             #   Manual-analysis section + an AI-analysis RM; Import has a read-only preview RM
-config/{receptionist,analysis,followups}.php  # grounding, retention (placeholder),
-                                             #   driver switches, follow-up window/cap
-database/seeders/RolePermissionSeeder.php  # THE access-control matrix (§9), executable
+config/{receptionist,analysis,followups,reporting}.php  # grounding, retention
+                                             #   (placeholder), driver switches,
+                                             #   follow-up window/cap, report window
+database/seeders/RolePermissionSeeder.php  # THE access-control matrix (§10), executable
 database/{migrations,seeders,factories}/
 tests/Feature/              # + Receptionist*, InboundCallWebhook, CallRetentionPurge,
                            #   CompanyAnalysis, DisagreementDetector, CsvImport,
                            #   ImportProvenance, FollowUpAutomation, FollowUpRuleRbac,
-                           #   RolePermissionMatrix, PreferredChannel, PanelSmoke, ...
+                           #   RolePermissionMatrix, PreferredChannel, ReportingMetrics,
+                           #   FollowUpDispatchGate, PanelSmoke, ...
 docker-compose.yml          # PostgreSQL 17 on host port 5434
 ```
 
-## 12. Testing
-- Pest, `php artisan test` (**195 tests**). In-memory SQLite for speed (queue =
+## 13. Testing
+- Pest, `php artisan test` (**221 tests**). In-memory SQLite for speed (queue =
   sync, so jobs run inline); app targets PostgreSQL; CI runs a Postgres migrate
   smoke.
 - Covered: audit log + append-only, PII redaction, AI-action & Task state
@@ -434,7 +499,9 @@ docker-compose.yml          # PostgreSQL 17 on host port 5434
   assignee strategies, per-company cap, NoActivity window), and **the full
   access-control matrix (every entity x role asserted in both directions, policy
   registration proven non-vacuously, DESTROY withheld from all, Role locked to
-  super_admin, re-seed revokes drift)**.
+  super_admin, re-seed revokes drift), and **reporting (rate denominators, the
+  sample floor, rejection measured over reviewed-only, disagreement needing both
+  analyses, median latency, compliance gauges, banner self-clearing)**.
 - **CI:** `.github/workflows/ci.yml` — Pint + Pest (PHP 8.4 + 8.5 matrix) +
   Postgres migrate smoke on the real `pgvector/pgvector:pg17` image.
 - **Local engine verification (2026-07-16).** The suite runs on SQLite for speed,
@@ -455,7 +522,7 @@ docker-compose.yml          # PostgreSQL 17 on host port 5434
 
 ---
 
-## 13. Open decisions & compliance flags
+## 14. Open decisions & compliance flags
 
 > **All legal/compliance items live in [`GO-LIVE-LEGAL.md`](GO-LIVE-LEGAL.md)** —
 > one checklist, not scattered across phase notes. The flags below are summaries;
@@ -489,7 +556,7 @@ docker-compose.yml          # PostgreSQL 17 on host port 5434
   — real semantic/scan quality arrives with Voyage / the PageSpeed + Claude wiring.
 - **Transcript search vs. encryption** (Phase 3): encryption blocks SQL search;
   transcript search will use the object store / a dedicated index.
-- **WATCH — `Update:AiAction` is coarser than the intent (§9).** A rep needs
+- **WATCH — `Update:AiAction` is coarser than the intent (§10).** A rep needs
   `Update` because that *is* approve/reject, but the permission technically also
   covers editing an AI action's payload. **Not exploitable today**: the review
   queue only exposes approve/reject, so there is no edit surface. Filament/Shield
@@ -497,14 +564,14 @@ docker-compose.yml          # PostgreSQL 17 on host port 5434
   ability or a dedicated approve endpoint. **Revisit the moment the review queue
   grows any edit affordance** — at that point a rep could alter what the AI
   proposed and then approve it, which would silently forge provenance.
-- **RBAC coverage is self-enforcing (§9).** `RolePermissionMatrixTest` compares
+- **RBAC coverage is self-enforcing (§10).** `RolePermissionMatrixTest` compares
   the matrix against the policy files on disk, so a new resource without an
   explicit access decision fails CI rather than shipping as another
   "only super_admin has permissions" hole.
 
 ---
 
-## 14. Roadmap status
+## 15. Roadmap status
 
 | Phase | Scope | Status |
 |---|---|---|
@@ -515,5 +582,5 @@ docker-compose.yml          # PostgreSQL 17 on host port 5434
 | 4 | Company Analysis (manual vs. AI, disagreement flags) | ✅ Done |
 | 5 | CSV Import (map → preview/dedup → create → queue analysis) | ✅ Done |
 | 7 | Follow-up Automation (rules → tasks; internal only) | ✅ Done |
-| 8 | Reporting (business + AI ops) | ⬜ **Next** |
-| 6 | AI Sales Representative (outbound) | ⛔ **Deferred** — blocked on the telephony constraint (§13) + telemarketing sign-off ([GO-LIVE-LEGAL](GO-LIVE-LEGAL.md) item #3). Phases 7–8 run first. |
+| 8 | Reporting (business + AI ops; no rollups, live queries) | ✅ Done |
+| 6 | AI Sales Representative (outbound) | ⛔ **Deferred** — blocked on the telephony constraint (§14) + telemarketing sign-off ([GO-LIVE-LEGAL](GO-LIVE-LEGAL.md) item #3). Phases 7–8 run first. |
