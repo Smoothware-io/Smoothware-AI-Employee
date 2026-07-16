@@ -68,6 +68,15 @@
         <env name="OUTBOUND_TEST_NUMBERS" value=""/>
         <env name="OUTBOUND_ALLOW_WITHOUT_REGISTER_SCREENING" value="false"/>
         <env name="OUTBOUND_REGISTER_SCREENING" value="none"/>
+        <!--
+            The originator too. OUTBOUND_ENABLED=false already stops the dialler,
+            but this is the second lock on the same door: it means that even if
+            someone flips `enabled` in a test to exercise the happy path, the
+            thing they get is a Fake holding an array — not a socket to a PBX that
+            can ring a stranger's phone.
+        -->
+        <env name="OUTBOUND_ORIGINATOR" value="fake"/>
+        <env name="ASTERISK_AMI_SECRET" value=""/>
         <env name="OPENAI_API_KEY" value=""/>
         <env name="OPENAI_PROJECT_ID" value=""/>
         <env name="OPENAI_WEBHOOK_SECRET" value=""/>

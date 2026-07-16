@@ -75,6 +75,44 @@ return [
     'max_calls_per_day' => (int) env('OUTBOUND_MAX_CALLS_PER_DAY', 50),
 
     /*
+    |--------------------------------------------------------------------------
+    | Asterisk — the only thing that can address both carriers
+    |--------------------------------------------------------------------------
+    |
+    | Sonetel requires the SIP user part to be a DID. OpenAI requires it to be the
+    | project id. No single address satisfies both, so Asterisk sits in the middle
+    | and translates: it rings the prospect over the Sonetel trunk, dials OpenAI
+    | over SIP/TLS, and bridges the two legs.
+    |
+    | This replaced SonetelDialer's approach. Sonetel confirmed their callback
+    | API's `call1` takes regular phone numbers only — an external SIP URI is
+    | supported for incoming-call FORWARDING, which is a separate feature. The
+    | code was never wrong; the assumption underneath it was.
+    |
+    | Lives in its own repo (smoothware-voice-sip) and belongs on its own box: a
+    | public SIP port has a different blast radius from a CRM.
+    |
+    | The driver defaults to 'fake'. The real originator is NEVER the default —
+    | .env has leaked into the test suite twice, and the second time a test run
+    | could have dialled a real person.
+    */
+    'asterisk' => [
+        'driver' => env('OUTBOUND_ORIGINATOR', 'fake'),
+
+        // AMI is loopback-bound on the Asterisk host. If Laravel runs elsewhere —
+        // it should — reach it over an SSH tunnel or WireGuard. AMI can originate
+        // calls, so AMI can spend money: an AMI port on the internet is the most
+        // reliable way to hand someone else your phone bill.
+        'ami_host' => env('ASTERISK_AMI_HOST', '127.0.0.1'),
+        'ami_port' => (int) env('ASTERISK_AMI_PORT', 5038),
+        'ami_username' => env('ASTERISK_AMI_USERNAME', 'laravel'),
+        'ami_secret' => env('ASTERISK_AMI_SECRET'),
+
+        // The dialplan context that brings the AI in once the person answers.
+        // Must match extensions.conf in the voice-sip repo.
+        'bridge_context' => env('ASTERISK_BRIDGE_CONTEXT', 'bridge-openai'),
+    ],
+    /*
     | OpenAI Realtime — the voice. Sonetel is the carrier; OpenAI only ever
     | RECEIVES SIP, which is why outbound works by bridging two legs rather than
     | by asking OpenAI to dial.

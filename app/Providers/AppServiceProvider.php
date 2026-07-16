@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Contracts\CallOriginator;
 use App\Contracts\CompanyAnalysisLlm;
 use App\Contracts\EmbeddingClient;
 use App\Contracts\ReceptionistLlm;
@@ -14,6 +15,8 @@ use App\Services\Analysis\FakeWebsiteAnalyzer;
 use App\Services\Analysis\HttpWebsiteAnalyzer;
 use App\Services\Embeddings\FakeEmbeddingClient;
 use App\Services\Embeddings\VoyageEmbeddingClient;
+use App\Services\Outbound\AsteriskOriginator;
+use App\Services\Outbound\FakeCallOriginator;
 use App\Services\Receptionist\ClaudeReceptionistLlm;
 use App\Services\Receptionist\FakeReceptionistLlm;
 use App\Services\Telephony\FakeTelephonyProvider;
@@ -76,6 +79,32 @@ class AppServiceProvider extends ServiceProvider
 
             return new FakeCompanyAnalysisLlm;
         });
+
+        // --- Outbound calling (Phase 6) ---
+        //
+        // Default is the Fake, and that is load-bearing rather than tidy: .env has
+        // leaked into the test suite twice, and the second time OUTBOUND_ENABLED
+        // was true, which meant a test run could have dialled a real person. The
+        // real originator requires a human to set OUTBOUND_ORIGINATOR=asterisk on
+        // purpose.
+        $this->app->bind(CallOriginator::class, function ($app): CallOriginator {
+            $config = (array) $app['config']->get('outbound.asterisk', []);
+
+            return match ($config['driver'] ?? 'fake') {
+                'asterisk' => new AsteriskOriginator(
+                    (string) ($config['ami_host'] ?? '127.0.0.1'),
+                    (int) ($config['ami_port'] ?? 5038),
+                    (string) ($config['ami_username'] ?? 'laravel'),
+                    (string) ($config['ami_secret'] ?? ''),
+                    (string) ($config['bridge_context'] ?? 'bridge-openai'),
+                ),
+                default => new FakeCallOriginator,
+            };
+        });
+
+        // Singleton so a test can resolve the Fake, assert on what it recorded,
+        // and be looking at the same instance the dialler used.
+        $this->app->singleton(FakeCallOriginator::class);
     }
 
     public function boot(): void
