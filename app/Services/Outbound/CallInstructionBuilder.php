@@ -3,6 +3,7 @@
 namespace App\Services\Outbound;
 
 use App\Enums\Language;
+use App\Enums\PreferredChannel;
 use App\Models\Company;
 use App\Services\ContextVersion;
 use App\Services\KnowledgeRetriever;
@@ -128,8 +129,39 @@ class CallInstructionBuilder
         $context .= "\n\nTAAL: ".($language?->instruction()
             ?? 'Onbekend. Begin in het Nederlands en vraag welke taal zij prefereren.');
 
-        // The AI's own analysis of their website — real findings, already measured.
-        // This is what makes the call informed rather than a cold script.
+        // A contact who told us they prefer email is still being phoned. Say so —
+        // the preference says HOW, not WHETHER, but ignoring it silently is rude
+        // and is exactly how someone ends up on the do-not-contact list.
+        $emailPreferrers = $company->contacts()
+            ->where('preferred_channel', PreferredChannel::Email->value)
+            ->exists();
+
+        if ($emailPreferrers) {
+            $context .= "\n\nLET OP: bij dit bedrijf staat genoteerd dat men liever per e-mail "
+                .'contact heeft. Erken dat, houd het kort, en bied aan het per e-mail te sturen.';
+        }
+
+        // 1. THE HUMAN'S JUDGMENT FIRST. A rep who knows this lead wrote this;
+        //    the AI is a guest in their account, not the analyst of record.
+        $manual = $company->manualAnalysis;
+
+        if ($manual !== null) {
+            $lines = collect([
+                'Pijnpunten' => $manual->pain_points,
+                'Kansen' => $manual->opportunities,
+                'Notities' => $manual->notes,
+                'Prioriteit' => $manual->priority?->getLabel(),
+            ])->filter(fn ($value): bool => filled($value))
+                ->map(fn ($value, $label): string => "- {$label}: {$value}")
+                ->implode("\n");
+
+            if ($lines !== '') {
+                $context .= "\n\nWAT ONS TEAM OVER DEZE LEAD ZEGT (door een mens geschreven — "
+                    ."dit is je belangrijkste sturing):\n{$lines}";
+            }
+        }
+
+        // 2. Then what the machine measured. Facts, but secondary.
         $analysis = $company->latestAiAnalysis;
 
         if ($analysis && filled($analysis->technical)) {
@@ -138,8 +170,16 @@ class CallInstructionBuilder
                 ->map(fn (array $f): string => '- '.($f['label'] ?? '').': '.($f['assessment'] ?? ''))
                 ->implode("\n");
 
-            $context .= "\n\nWAT WE OVER HUN WEBSITE WETEN (feitelijk gemeten):\n{$findings}"
+            $context .= "\n\nWAT WIJ AUTOMATISCH GEMETEN HEBBEN op hun website:\n{$findings}"
                 ."\n\nGebruik dit alleen als het natuurlijk past. Niet opdreunen.";
+        }
+
+        // 3. The rule that makes principle #2 real on a live call: where the human
+        //    and the machine disagree, the human wins. Without this the AI would
+        //    argue its own PageSpeed number over a rep who has met these people.
+        if ($manual !== null && $analysis !== null) {
+            $context .= "\n\nALS de notities van ons team en onze metingen elkaar tegenspreken: "
+                .'volg ons team. Zij kennen deze klant, de meting is maar een momentopname.';
         }
 
         return $context;

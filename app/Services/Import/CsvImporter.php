@@ -127,6 +127,13 @@ class CsvImporter
                 in_array($normalised, ['country', 'land', 'countrycode'], true) => 'country',
                 in_array($normalised, ['language', 'taal', 'lang'], true) => 'language',
                 in_array($normalised, ['jobtitle', 'title', 'functie', 'role', 'rol'], true) => 'contact_job_title',
+                // Per-lead targeting, written by a human before the call. These
+                // populate the MANUAL analysis (Phase 4) — the rep's judgment,
+                // which the AI may read but must never overwrite.
+                in_array($normalised, ['painpoints', 'pain', 'problem', 'problemen', 'issues'], true) => 'pain_points',
+                in_array($normalised, ['opportunities', 'opportunity', 'kansen', 'target', 'angle', 'hook'], true) => 'opportunities',
+                in_array($normalised, ['notes', 'note', 'notities', 'opmerkingen', 'remarks'], true) => 'notes',
+                in_array($normalised, ['priority', 'prioriteit'], true) => 'priority',
                 in_array($normalised, ['firstname', 'contactfirstname', 'contact'], true) => 'contact_first_name',
                 in_array($normalised, ['lastname', 'surname', 'contactlastname'], true) => 'contact_last_name',
                 in_array($normalised, ['contactemail'], true) => 'contact_email',

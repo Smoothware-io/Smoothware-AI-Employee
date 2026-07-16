@@ -2,6 +2,7 @@
 
 namespace App\Services\Import;
 
+use App\Enums\AnalysisPriority;
 use App\Enums\CompanyStatus;
 use App\Enums\ImportRowDisposition;
 use App\Enums\ImportStatus;
@@ -10,6 +11,7 @@ use App\Enums\PreferredChannel;
 use App\Enums\RecordSource;
 use App\Jobs\GenerateCompanyAnalysis;
 use App\Models\Company;
+use App\Models\CompanyManualAnalysis;
 use App\Models\Contact;
 use App\Models\Import;
 use App\Models\ImportRow;
@@ -105,7 +107,52 @@ class ImportCommitter
             ]);
         }
 
+        $this->applyManualAnalysis($import, $company, $mapped);
+
         $row->forceFill(['company_id' => $company->id])->saveQuietly();
+    }
+
+    /**
+     * Per-lead targeting from the sheet -> the MANUAL analysis (Phase 4).
+     *
+     * This is a human's judgment about a specific lead — "verouderde website",
+     * "wil lokaal groeien", "prijsbewust" — so it belongs in the human-owned
+     * analysis, never in the AI's. The AI reads it on the call and is told the
+     * human is right where they disagree.
+     *
+     * updateOrCreate, but only ADDS: an import must never silently overwrite what
+     * a rep already wrote about a company they know.
+     */
+    private function applyManualAnalysis(Import $import, Company $company, array $mapped): void
+    {
+        $fields = array_filter([
+            'pain_points' => $mapped['pain_points'] ?? null,
+            'opportunities' => $mapped['opportunities'] ?? null,
+            'notes' => $mapped['notes'] ?? null,
+            'priority' => AnalysisPriority::tryFrom(mb_strtolower(trim((string) ($mapped['priority'] ?? ''))))?->value,
+        ], fn ($value): bool => filled($value));
+
+        if ($fields === []) {
+            return;
+        }
+
+        $existing = CompanyManualAnalysis::firstWhere('company_id', $company->id);
+
+        if ($existing !== null) {
+            // A rep's own words outrank a spreadsheet. Only fill the blanks.
+            $fields = array_filter($fields, fn ($value, $key): bool => blank($existing->{$key}), ARRAY_FILTER_USE_BOTH);
+
+            if ($fields !== []) {
+                $existing->update($fields);
+            }
+
+            return;
+        }
+
+        CompanyManualAnalysis::create($fields + [
+            'company_id' => $company->id,
+            'created_by' => $import->created_by,
+        ]);
     }
 
     /**
