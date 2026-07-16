@@ -7,8 +7,9 @@ stays legible as it grows.
 > **Status:** Phases 0 (+ hardening), 1 (Core CRM), 2 (Knowledge Base + RAG),
 > 3 (AI Receptionist — post-call shadow mode), 4 (Company Analysis), and
 > 5 (CSV Import), 7 (Follow-up Automation), and **8 (Reporting) complete.**
-> **Phase 6 (outbound) is the only one left, and is deferred** — not buildable as
-> briefed on Sonetel, and gated on telemarketing sign-off. See
+> **Phase 6 (outbound) is the only one left, and is deferred on LEGAL grounds** —
+> gated on telemarketing sign-off. (The telephony blocker was corrected: live AI
+> *is* reachable from Sonetel via SIP forward — §14.) See
 > [`GO-LIVE-LEGAL.md`](GO-LIVE-LEGAL.md).
 
 ---
@@ -120,8 +121,9 @@ approval — **nothing is auto-created**. Reuses Phase 0 (`ai_actions`) + Phase 
 **Post-call, not live (confirmed against Sonetel's API).** Sonetel has no
 real-time media-streaming API; its Recording API downloads recordings *after* the
 call. Flow: call handled live by Sonetel IVR/voicemail/a human → recorded → we
-pull, transcribe, and draft. **"Live AI answering the call" is out of scope on
-Sonetel — §14.**
+pull, transcribe, and draft. **"Live AI answering the call" is out of scope for
+THIS pipeline, but is reachable from Sonetel via SIP forward — see the §14
+correction.**
 
 **Adapters + offline fakes** (no vendor account, no API calls in CI):
 `TelephonyProvider` (`Sonetel`, UNVERIFIED shapes / `Fake`), `TranscriptionClient`
@@ -559,10 +561,12 @@ docker-compose.yml          # PostgreSQL 17 on host port 5434
   - **Imported data provenance** (Phase 5): imports carry `source = import` and a
     campaign, but the *lawful basis* for cold-loaded B2B contact data (legitimate
     interest vs. consent) is a go-live legal check, not a code default.
-- **Sonetel is post-call only (confirmed).** No real-time media-streaming API. Still
-  need hands-on access to verify recording/callback payload shapes
-  (`SonetelProvider` marked UNVERIFIED) and whether a call-completed callback exists
-  (else a scheduled recording-poll job).
+- **Sonetel's *API* is post-call only (confirmed) — but Sonetel can still hand a
+  live call to someone else (see the correction below).** Its API will not stream
+  audio to us; that is why the shipped receptionist is post-call. Still need
+  hands-on access to verify recording/callback payload shapes (`SonetelProvider`
+  marked UNVERIFIED) and whether a call-completed callback exists (else a scheduled
+  recording-poll job).
 - **Live AI *answering* the call — separate future decision. Deferred, not
   blocked-on-ignorance.** Everything telephony sits behind `TelephonyProvider`
   (today: `parseInboundWebhook` + `name`), so a new carrier is one class plus a
@@ -586,6 +590,61 @@ docker-compose.yml          # PostgreSQL 17 on host port 5434
   telemarketing answer (GO-LIVE-LEGAL Q2). Buying a carrier integration now would
   spend real effort on a capability that may be legally off the table — and if the
   answer is "AI-prepared script, human calls", Sonetel already does that.
+
+  #### CORRECTION (2026-07-16): "live AI is not buildable on Sonetel" was WRONG
+
+  That claim rested on Sonetel's API not streaming audio **to us** — which is true,
+  and turns out to be irrelevant. It never occurred to me that the AI could
+  **receive the call itself**. Two verified facts close the gap:
+
+  - Sonetel's own docs: incoming calls **"can be forwarded across the Internet to
+    any SIP address of choice"** (`connect_to` / `connect_to_type`, panel or API).
+  - OpenAI's Realtime API **answers SIP natively** —
+    `sip:$PROJECT_ID@sip.api.openai.com;transport=tls`, GA, with call transfer via
+    SIP REFER.
+
+  So there is a fourth shape, and it is the cheapest of them:
+
+  | # | Shape | Unlocks | Costs |
+  |---|---|---|---|
+  | 4 | **Sonetel number → SIP forward → OpenAI Realtime** | Live AI on the existing Dutch number — **no Twilio, no media server** | OpenAI is a **US** processor handling live voice; AI Act Art. 50 disclosure; a second LLM vendor (voice = OpenAI while the CRM brain stays Claude) |
+
+  **Where our app sits in shape 4:** Sonetel is the carrier, OpenAI is the voice,
+  Laravel is the brain. OpenAI calls **our** webhook on an incoming call; we answer
+  with session config + KB context from `KnowledgeRetriever`; we expose tools it can
+  call; the post-call transcript re-enters the existing Phase 3 draft→approve
+  pipeline. **`fallback_to_human` becomes a literal SIP REFER transfer** — the
+  grounding enforcement finally doing the thing it always described.
+
+  **The principle this breaks — flagged, not solved.** Every phase so far is
+  "AI proposes → human approves → executes". A live AI is the AI **executing**, to a
+  customer, in real time, with no human in the loop: you cannot approve a sentence
+  after it has been spoken. The approval queue — the strongest safeguard in this
+  system — does not apply to a conversation. Shape 4's safeguards are different in
+  kind: grounding (what it may say), SIP REFER (when it hands off), post-call
+  review, and a kill switch. **That is a different product from the shipped
+  receptionist and should be named as one before it is built.**
+
+  **Inbound is not outbound — and that is the cheap insight.** The telemarketing
+  regime governs calls we MAKE. An AI answering our own number when someone calls
+  *us* is not telemarketing, so shape 4 **inbound** clears three items (AI Act
+  disclosure, recording consent/retention, OpenAI DPA) and **never touches Q2** —
+  a materially smaller gate than Phase 6.
+
+  #### OPEN QUESTION (raised 2026-07-16, UNVERIFIED, deliberately unbuilt)
+
+  **Outbound may work by the same trick.** Sonetel's callback API's `call1`
+  reportedly accepts a **SIP URI**, not only a phone number. If true:
+  `call1 = sip:…@sip.api.openai.com`, `call2 = the prospect` → Sonetel bridges an
+  **AI leg to a human leg**, i.e. live AI *outbound* on Sonetel, with no Twilio.
+
+  To verify before it is ever designed: does OpenAI's SIP endpoint accept the call
+  in that flow (it is still inbound *to OpenAI*), and what does the AI do during the
+  gap while Sonetel dials leg 2 and it has nobody to talk to?
+
+  **This changes nothing legally.** Outbound is squarely the telemarketing regime
+  (GO-LIVE-LEGAL Q2 / item #3), so it stays gated on the same sign-off regardless of
+  whether the pipe works. Feasibility is not permission.
 - **Database engine (decided):** MySQL → PostgreSQL while the cost was near-zero.
   Banks jsonb indexing (Phase 4/8); keeps pgvector a cheap future option.
 - **RAG storage, pgvector deferred:** embeddings in `jsonb`, brute-force cosine in
@@ -622,4 +681,4 @@ docker-compose.yml          # PostgreSQL 17 on host port 5434
 | 5 | CSV Import (map → preview/dedup → create → queue analysis) | ✅ Done |
 | 7 | Follow-up Automation (rules → tasks; internal only) | ✅ Done |
 | 8 | Reporting (business + AI ops; no rollups, live queries) | ✅ Done |
-| 6 | AI Sales Representative (outbound) | ⛔ **Deferred** — blocked on the telephony constraint (§14) + telemarketing sign-off ([GO-LIVE-LEGAL](GO-LIVE-LEGAL.md) item #3). Phases 7–8 run first. |
+| 6 | AI Sales Representative (outbound) | ⛔ **Deferred — now on LEGAL grounds, not technical.** The telephony constraint may not be one after all (§14: Sonetel SIP-forward → OpenAI Realtime is verified for inbound; outbound via `call1` as a SIP URI is an open question). Gated on telemarketing sign-off ([GO-LIVE-LEGAL](GO-LIVE-LEGAL.md) item #3). |
