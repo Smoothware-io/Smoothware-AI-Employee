@@ -3,10 +3,13 @@
 use App\Enums\AnalysisPriority;
 use App\Enums\ImportRowDisposition;
 use App\Enums\ImportStatus;
+use App\Models\Call;
 use App\Models\Company;
 use App\Models\CompanyAiAnalysis;
 use App\Models\CompanyManualAnalysis;
 use App\Models\Contact;
+use App\Models\FollowUp;
+use App\Models\FollowUpRule;
 use App\Models\Import;
 use App\Models\Note;
 use App\Models\PromptRule;
@@ -43,6 +46,8 @@ it('renders every resource index page', function (string $url) {
     '/admin/ai-runs',
     '/admin/imports',
     '/admin/campaigns',
+    '/admin/follow-up-rules',
+    '/admin/follow-ups',
 ]);
 
 it('renders a company detail page with relation managers, timeline, and AI analysis', function () {
@@ -67,6 +72,17 @@ it('renders an import preview page with staged rows', function () {
     ]);
 
     get("/admin/imports/{$import->getKey()}")->assertOk();
+});
+
+it('renders the follow-up ledger with a fired follow-up', function () {
+    $company = Company::factory()->create();
+    FollowUpRule::factory()->create();
+
+    Call::factory()->for($company)->create(); // fires the rule inline (sync queue)
+
+    expect(FollowUp::count())->toBe(1);
+    get('/admin/follow-ups')->assertOk();
+    get('/admin/follow-up-rules')->assertOk();
 });
 
 it('renders a prompt-rule-set detail page with its rules', function () {

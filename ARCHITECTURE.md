@@ -6,9 +6,9 @@ stays legible as it grows.
 
 > **Status:** Phases 0 (+ hardening), 1 (Core CRM), 2 (Knowledge Base + RAG),
 > 3 (AI Receptionist — post-call shadow mode), 4 (Company Analysis), and
-> **5 (CSV Import) complete.** **Phase 7 (Follow-up Automation) next** — Phase 6
-> (outbound) is deferred: not buildable as briefed on Sonetel, and gated on
-> telemarketing sign-off. See [`GO-LIVE-LEGAL.md`](GO-LIVE-LEGAL.md).
+> 5 (CSV Import), and **7 (Follow-up Automation) complete.** **Phase 8 (Reporting)
+> next** — Phase 6 (outbound) is deferred: not buildable as briefed on Sonetel, and
+> gated on telemarketing sign-off. See [`GO-LIVE-LEGAL.md`](GO-LIVE-LEGAL.md).
 
 ---
 
@@ -18,11 +18,11 @@ stays legible as it grows.
 |---|---|---|
 | Framework | **Laravel 13** (PHP **8.4+** floor; dev + CI also on 8.5) | Mature, relational, batteries-included. |
 | Admin/UI | **Filament 5** (TALL: Tailwind, Alpine, Livewire) | A CRM/admin-panel engine. Server-rendered; no separate SPA. Badge theming makes "AI data looks different from human data" straightforward. |
-| Database | **PostgreSQL 17** (via Docker Compose) | Fits the relational model; jsonb for KB/analysis JSON; pgvector available but deferred (§11). |
+| Database | **PostgreSQL 17** (via Docker Compose) | Fits the relational model; jsonb for KB/analysis JSON; pgvector available but deferred (§12). |
 | Auth & RBAC | **spatie/laravel-permission** + **Filament Shield** | Roles + per-resource policies. |
 | AI reasoning | **Anthropic Claude API** — Opus 4.8 / Haiku 4.5 | Generation only (no embeddings). Structured outputs for receptionist + analysis. |
 | Embeddings | **Voyage AI** (prod) / offline fake (dev/test) | Separate provider because Claude has no embeddings API. Swappable via `EmbeddingClient`. |
-| Telephony | **Sonetel** (Dutch number) | Phase 3, **POST-CALL**. Recording API (download after the call) — **no live media streaming** (§11). |
+| Telephony | **Sonetel** (Dutch number) | Phase 3, **POST-CALL**. Recording API (download after the call) — **no live media streaming** (§12). |
 | Background jobs | **Laravel Queue** (database driver → Redis/Horizon later) | Embeddings, transcription, receptionist analysis, company analysis, retention purge, CSV stage/commit. Run `php artisan queue:work`. |
 | Tests | **Pest 4** | Risky/stateful logic (state machines, RAG, grounding, disagreement, import dedup, RBAC, PII, UI render). |
 | Formatting | **Laravel Pint** | |
@@ -54,7 +54,7 @@ Four pillars built **once as infrastructure** and reused by every later phase.
 
 ### 2.3 Soft delete everywhere
 - **`archived_at`** (not `deleted_at`) + `SoftDeletes`. Archive, never
-  hard-delete — except for GDPR erasure (§11).
+  hard-delete — except for GDPR erasure (§12).
 
 ### 2.4 AI action framework ("AI proposes → human approves → executes")
 - `ai_actions` + `AiActionService`. Lifecycle: `draft → approved → (applied)`,
@@ -93,7 +93,7 @@ badges (AI = amber); `ai_action_id` links any AI row to its approval record.
   `PromptRuleSetService.activate()` archives the prior version, audited.
 - **RAG pipeline:** `EmbeddingClient` (`Fake` / `Voyage`) → `KnowledgeChunker` →
   **`EmbedKnowledgeEntry`** queued job → `KnowledgeRetriever` (brute-force cosine
-  over published chunks, fine for a small KB, §11; top-K + scores).
+  over published chunks, fine for a small KB, §12; top-K + scores).
 - **`source_context_version`** — `ContextVersion::current()` →
   `rules:v{N}|kb:{timestamp}`, stamped on every AI record.
 
@@ -112,7 +112,7 @@ approval — **nothing is auto-created**. Reuses Phase 0 (`ai_actions`) + Phase 
 real-time media-streaming API; its Recording API downloads recordings *after* the
 call. Flow: call handled live by Sonetel IVR/voicemail/a human → recorded → we
 pull, transcribe, and draft. **"Live AI answering the call" is out of scope on
-Sonetel — §11.**
+Sonetel — §12.**
 
 **Adapters + offline fakes** (no vendor account, no API calls in CI):
 `TelephonyProvider` (`Sonetel`, UNVERIFIED shapes / `Fake`), `TranscriptionClient`
@@ -127,7 +127,7 @@ Approve runs `ReceptionistActionApplier` (creates AI-tagged Company via
 `CompanyMatcher` dedup / Contact / Note / Task, links the call, atomic).
 
 **GDPR:** consent + retention are config-driven (`config/receptionist.php`, 90-day
-placeholder) + daily `PurgeExpiredCallContent`; real values need legal sign-off (§11).
+placeholder) + daily `PurgeExpiredCallContent`; real values need legal sign-off (§12).
 
 ---
 
@@ -196,7 +196,63 @@ for immediate feedback in the panel.
 
 ---
 
-## 8. Cross-cutting conventions (every new table/model)
+---
+
+## 8. Phase 7 — Follow-up Automation
+
+Nothing falls through the cracks: when something happens (or pointedly doesn't),
+a task appears for a human. **Internal only** — rules create Phase-1 `tasks`;
+nothing is ever sent to a prospect from here. Auto-sending outbound email is
+deliberately out of scope: it would reopen the direct-marketing / ePrivacy
+surface that Phase 7 was sequenced *ahead of* Phase 6 to avoid
+([`GO-LIVE-LEGAL.md`](GO-LIVE-LEGAL.md)).
+
+**The design turns on *who decided*:**
+
+| Path | Whose judgment | Behaviour |
+|---|---|---|
+| A **rule** fired | A human wrote the rule | Task created immediately, `source = system`. **No approval queue.** |
+| **AI** suggested | The AI invented it | Would go through `ai_actions` → review queue. **Off at launch** (`followups.ai_suggestions`); schema carries the provenance columns, the suggester is not built. |
+
+Routing human-authored automation through the approval queue would train
+reviewers to rubber-stamp it — and a rubber-stamped queue stops protecting the AI
+proposals that actually need scrutiny. Keeping the paths structurally distinct is
+what preserves principle #2 in practice, not just on paper.
+
+**Schema.** `follow_up_rules` (trigger, jsonb `conditions`, delay, task template,
+`assignee_strategy`, `is_active`) + **`follow_ups`** — a ledger with one row per
+*decision*, including suppressed ones. Two columns carry the weight:
+
+- **`dedup_key` (UNIQUE)** — idempotency enforced by the **database**, not by the
+  code remembering. The daily sweep re-runs over the same quiet companies, and
+  two workers can race; exactly one may win.
+- **`rule_snapshot`** — the rule as it read *when it fired*. Without it, editing a
+  rule silently rewrites history. Cheaper than versioning (cf. `prompt_rule_sets`)
+  and sufficient, because nothing re-runs an old rule.
+
+**Triggers read the event log** rather than bolting hooks onto models: everything
+already emits `{model}.{verb}`, so the Phase-0 backbone *is* the trigger stream.
+`EventLogger` now dispatches `EventLogged` and **stays ignorant of who listens** —
+the append-only backbone gains no dependency on Phase 7.
+`FollowUpTrigger::forEvent()` is the single mapping point. **NoActivity** fires on
+the *absence* of events, so it can't be pushed — a daily `EvaluateTimeBasedFollowUps`
+pulls it, measured against the Phase-1 timeline anchor (`events.company_id`), so
+there is no `last_activity_at` column to drift.
+
+**Guards.** A per-company/day cap (`followups.max_per_company_per_day`) stops a
+badly-written rule burying a rep; suppressed follow-ups are recorded as `skipped`,
+never silently dropped. Assignees resolve **at fire time**, so a rule written
+months ago still routes to whoever owns the company today.
+
+**RBAC.** Authoring is `sales_manager` + `super_admin`; `sales_rep` is read-only —
+a standing rule creates work for other people without their per-instance consent.
+The restriction lives in **permission assignment**
+(`FollowUpRulePermissionSeeder`), *not* in the policy: Shield regenerates policies
+on `shield:generate --all`, so a hand-written role check there would be silently
+clobbered — a security regression with no failing test. `FollowUpRuleRbacTest` is
+the tripwire.
+
+## 9. Cross-cutting conventions (every new table/model)
 
 - `id`, `created_at`, `updated_at`, `archived_at` unless append-only.
 - `created_by` / `owner_id` on user-authored data.
@@ -208,7 +264,7 @@ for immediate feedback in the panel.
   (`EmbeddingClient`, `TelephonyProvider`, `TranscriptionClient`, `ReceptionistLlm`,
   `WebsiteAnalyzer`, `CompanyAnalysisLlm`) — build + test with no vendor account.
 
-## 9. Key paths
+## 10. Key paths
 
 ```
 app/
@@ -216,29 +272,36 @@ app/
   Contracts/                # EmbeddingClient, TelephonyProvider, TranscriptionClient,
                             #   ReceptionistLlm, WebsiteAnalyzer, CompanyAnalysisLlm
   Enums/                    # + CallIntent, AnalysisPriority, ImportStatus, ImportRowDisposition,
-                            #   LawfulBasis (GDPR Art. 6 basis per import)
+                            #   LawfulBasis (GDPR Art. 6 basis per import), FollowUpTrigger,
+                            #   FollowUpStatus, AssigneeStrategy
+  Events/EventLogged.php    # the log announces; Phase 7 listens (backbone stays dumb)
+  Listeners/QueueFollowUpEvaluation.php
   Http/Controllers/InboundCallWebhookController.php
   Jobs/                     # EmbedKnowledgeEntry, ProcessInboundCall, PurgeExpiredCallContent,
-                            #   GenerateCompanyAnalysis, StageImport, CommitImport
+                            #   GenerateCompanyAnalysis, StageImport, CommitImport,
+                            #   EvaluateFollowUpsForEvent, EvaluateTimeBasedFollowUps
   Models/                   # + KnowledgeEntry/Chunk, PromptRuleSet/Rule, AiRun,
-                            #   CompanyManualAnalysis, CompanyAiAnalysis, Campaign, Import, ImportRow
+                            #   CompanyManualAnalysis, CompanyAiAnalysis, Campaign, Import, ImportRow,
+                            #   FollowUpRule, FollowUp
   Services/                 # EventLogger, AiActionService, CallContentEraser, Knowledge*, ContextVersion,
                             #   Embeddings/*, Telephony/*, Receptionist/*, Analysis/{CompanyAnalyzer,
                             #   DisagreementDetector, Fake/Http WebsiteAnalyzer, Fake/Claude AnalysisLlm},
-                            #   Import/{CsvImporter, ImportCommitter}
+                            #   Import/{CsvImporter, ImportCommitter}, FollowUps/FollowUpEvaluator
   Filament/Resources/       # CRM [nav] + AiAction(review)/AiRun [AI Receptionist nav] +
                             #   Import/Campaign [Import nav]; Company form has an inline
                             #   Manual-analysis section + an AI-analysis RM; Import has a read-only preview RM
-config/{receptionist,analysis}.php   # grounding, retention (placeholder), driver switches
+config/{receptionist,analysis,followups}.php  # grounding, retention (placeholder),
+                                             #   driver switches, follow-up window/cap
 database/{migrations,seeders,factories}/
 tests/Feature/              # + Receptionist*, InboundCallWebhook, CallRetentionPurge,
                            #   CompanyAnalysis, DisagreementDetector, CsvImport,
-                           #   ImportProvenance, PanelSmoke, ...
+                           #   ImportProvenance, FollowUpAutomation, FollowUpRuleRbac,
+                           #   PanelSmoke, ...
 docker-compose.yml          # PostgreSQL 17 on host port 5434
 ```
 
-## 10. Testing
-- Pest, `php artisan test` (**90 tests**). In-memory SQLite for speed (queue =
+## 11. Testing
+- Pest, `php artisan test` (**123 tests**). In-memory SQLite for speed (queue =
   sync, so jobs run inline); app targets PostgreSQL; CI runs a Postgres migrate
   smoke.
 - Covered: audit log + append-only, PII redaction, AI-action & Task state
@@ -249,12 +312,14 @@ docker-compose.yml          # PostgreSQL 17 on host port 5434
   CSV import (auto-map + dispositions, commit defaults/dedup/contacts/queued
   analysis, idempotency, optional-column omission), **import provenance (list
   source + lawful basis, company→import trace, unjustified-basis flag)**, and a UI
-  render smoke across every resource page.
+  render smoke across every resource page, **follow-up automation (trigger
+  mapping, idempotency incl. the DB constraint, rule-snapshot freeze, conditions,
+  assignee strategies, per-company cap, NoActivity window) + rule-authoring RBAC**.
 - **CI:** `.github/workflows/ci.yml` — Pint + Pest + Postgres migrate.
 
 ---
 
-## 11. Open decisions & compliance flags
+## 12. Open decisions & compliance flags
 
 > **All legal/compliance items live in [`GO-LIVE-LEGAL.md`](GO-LIVE-LEGAL.md)** —
 > one checklist, not scattered across phase notes. The flags below are summaries;
@@ -291,7 +356,7 @@ docker-compose.yml          # PostgreSQL 17 on host port 5434
 
 ---
 
-## 12. Roadmap status
+## 13. Roadmap status
 
 | Phase | Scope | Status |
 |---|---|---|
@@ -301,6 +366,6 @@ docker-compose.yml          # PostgreSQL 17 on host port 5434
 | 3 | AI Receptionist (post-call shadow mode; approve → apply) | ✅ Done |
 | 4 | Company Analysis (manual vs. AI, disagreement flags) | ✅ Done |
 | 5 | CSV Import (map → preview/dedup → create → queue analysis) | ✅ Done |
-| 7 | Follow-up Automation | ⬜ **Next** |
-| 8 | Reporting (business + AI ops) | ⬜ |
-| 6 | AI Sales Representative (outbound) | ⛔ **Deferred** — blocked on the telephony constraint (§11) + telemarketing sign-off ([GO-LIVE-LEGAL](GO-LIVE-LEGAL.md) item #3). Phases 7–8 run first. |
+| 7 | Follow-up Automation (rules → tasks; internal only) | ✅ Done |
+| 8 | Reporting (business + AI ops) | ⬜ **Next** |
+| 6 | AI Sales Representative (outbound) | ⛔ **Deferred** — blocked on the telephony constraint (§12) + telemarketing sign-off ([GO-LIVE-LEGAL](GO-LIVE-LEGAL.md) item #3). Phases 7–8 run first. |
