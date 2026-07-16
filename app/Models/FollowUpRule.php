@@ -5,12 +5,14 @@ namespace App\Models;
 use App\Concerns\LogsEvents;
 use App\Enums\AssigneeStrategy;
 use App\Enums\FollowUpTrigger;
+use App\Listeners\QueueFollowUpEvaluation;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\Cache;
 
 /**
  * A standing follow-up instruction written by a human (Phase 7).
@@ -62,6 +64,51 @@ class FollowUpRule extends Model
             'is_active' => 'boolean',
             'delay_minutes' => 'integer',
         ];
+    }
+
+    /**
+     * Which triggers currently have at least one active rule. Cached because
+     * EVERY write to the event log asks this question — see
+     * {@see QueueFollowUpEvaluation}.
+     */
+    public const ACTIVE_TRIGGERS_CACHE_KEY = 'followups.active_triggers';
+
+    protected static function booted(): void
+    {
+        // Any change to a rule can change the answer: created, renamed, activated,
+        // deactivated, archived, restored.
+        static::saved(fn () => static::forgetActiveTriggers());
+        static::deleted(fn () => static::forgetActiveTriggers());
+        static::restored(fn () => static::forgetActiveTriggers());
+    }
+
+    /**
+     * Trigger values with at least one active rule.
+     *
+     * Note the invalidation boundary: this is flushed by MODEL events, so a mass
+     * `FollowUpRule::query()->update(...)` would bypass it and leave the cache
+     * stale. Change rules through the model (the panel does).
+     *
+     * @return array<int, string>
+     */
+    public static function activeTriggers(): array
+    {
+        return Cache::rememberForever(self::ACTIVE_TRIGGERS_CACHE_KEY, fn (): array => static::query()
+            ->active()
+            ->distinct()
+            ->pluck('trigger')
+            ->map(fn ($trigger): string => $trigger instanceof FollowUpTrigger ? $trigger->value : (string) $trigger)
+            ->all());
+    }
+
+    public static function hasActiveRuleFor(FollowUpTrigger $trigger): bool
+    {
+        return in_array($trigger->value, static::activeTriggers(), true);
+    }
+
+    public static function forgetActiveTriggers(): void
+    {
+        Cache::forget(self::ACTIVE_TRIGGERS_CACHE_KEY);
     }
 
     /**
