@@ -2,6 +2,7 @@
 
 namespace App\Filament\Widgets;
 
+use App\Services\KnowledgeRetriever;
 use App\Services\Reporting\AiTrustMetrics;
 use App\Services\Reporting\BusinessMetrics;
 use Filament\Widgets\StatsOverviewWidget;
@@ -24,6 +25,8 @@ class ComplianceGauges extends StatsOverviewWidget
     {
         $business = app(BusinessMetrics::class);
         $trust = app(AiTrustMetrics::class);
+        $retriever = app(KnowledgeRetriever::class);
+        $stale = $retriever->staleChunkCount();
 
         $missingBasis = $business->importsMissingLawfulBasis();
         $unjustified = $business->importsWithUnjustifiedBasis();
@@ -55,6 +58,16 @@ class ComplianceGauges extends StatsOverviewWidget
             Stat::make('Contacts with no channel preference', $business->contactsWithoutChannelPreference())
                 ->description('Coverage, not a problem — null means never asked')
                 ->color('gray'),
+
+            // Chunks embedded by a different model are INVISIBLE to retrieval —
+            // the AI silently loses access to part of its own knowledge base.
+            // Non-zero here is the fingerprint of a provider switch without a
+            // `php artisan kb:reembed`.
+            Stat::make('KB chunks not retrievable', $stale)
+                ->description($stale > 0
+                    ? 'Embedded by another model — run kb:reembed'
+                    : "All chunks match {$retriever->activeModel()}")
+                ->color($stale > 0 ? 'danger' : 'success'),
         ];
     }
 }

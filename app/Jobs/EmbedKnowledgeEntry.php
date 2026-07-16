@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Contracts\EmbeddingClient;
+use App\Enums\EmbeddingInputType;
 use App\Models\KnowledgeEntry;
 use App\Services\KnowledgeChunker;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -40,7 +41,8 @@ class EmbedKnowledgeEntry implements ShouldQueue
             return;
         }
 
-        $vectors = $client->embedBatch($texts);
+        // Stored KB content is the haystack, not the needle.
+        $vectors = $client->embedBatch($texts, EmbeddingInputType::Document);
 
         foreach ($texts as $index => $content) {
             $entry->chunks()->create([

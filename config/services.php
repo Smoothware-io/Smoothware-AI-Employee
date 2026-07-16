@@ -44,7 +44,8 @@ return [
         'driver' => env('EMBEDDINGS_DRIVER', 'fake'),
         'voyage' => [
             'key' => env('VOYAGE_API_KEY'),
-            'model' => env('VOYAGE_MODEL', 'voyage-3'),
+            // voyage-3 is retired; current lineup is voyage-4*/voyage-3.5*/voyage-3-large.
+            'model' => env('VOYAGE_MODEL', 'voyage-3.5'),
             'dimensions' => (int) env('VOYAGE_DIMENSIONS', 1024),
         ],
     ],

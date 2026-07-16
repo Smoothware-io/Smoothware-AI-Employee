@@ -3,18 +3,24 @@
 namespace App\Services\Embeddings;
 
 use App\Contracts\EmbeddingClient;
+use App\Enums\EmbeddingInputType;
 
 /**
  * Deterministic, offline embedding client for local dev, tests and CI — no API
  * key, no network. Uses the hashing trick (bag-of-words over a fixed dimension),
  * so texts that share words get a higher cosine similarity. Good enough to prove
  * the retrieval pipeline ranks correctly; swapped for Voyage in production.
+ *
+ * Ignores `$type`: a bag-of-words has no notion of query-vs-document tuning.
+ * Accepting the argument keeps the contract honest, and the model name carries
+ * "fake" so the retriever's mixed-model guard treats these vectors as
+ * incomparable to real ones — which they are.
  */
 class FakeEmbeddingClient implements EmbeddingClient
 {
     public function __construct(private int $dims = 256) {}
 
-    public function embed(string $text): array
+    public function embed(string $text, EmbeddingInputType $type): array
     {
         $vector = array_fill(0, $this->dims, 0.0);
 
@@ -25,9 +31,9 @@ class FakeEmbeddingClient implements EmbeddingClient
         return $this->normalize($vector);
     }
 
-    public function embedBatch(array $texts): array
+    public function embedBatch(array $texts, EmbeddingInputType $type): array
     {
-        return array_map(fn (string $text): array => $this->embed($text), array_values($texts));
+        return array_map(fn (string $text): array => $this->embed($text, $type), array_values($texts));
     }
 
     public function model(): string
