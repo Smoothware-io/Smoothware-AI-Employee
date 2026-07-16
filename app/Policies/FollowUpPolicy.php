@@ -4,16 +4,10 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use App\Filament\Resources\FollowUps\FollowUpResource;
 use App\Models\FollowUp;
 use Illuminate\Auth\Access\HandlesAuthorization;
 use Illuminate\Foundation\Auth\User as AuthUser;
 
-/**
- * Matches Filament Shield's generated shape exactly. The follow-up ledger is
- * read-only in the UI ({@see FollowUpResource::canCreate()});
- * nobody is granted the write permissions below.
- */
 class FollowUpPolicy
 {
     use HandlesAuthorization;

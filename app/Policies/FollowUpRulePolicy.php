@@ -5,19 +5,9 @@ declare(strict_types=1);
 namespace App\Policies;
 
 use App\Models\FollowUpRule;
-use Database\Seeders\FollowUpRulePermissionSeeder;
 use Illuminate\Auth\Access\HandlesAuthorization;
 use Illuminate\Foundation\Auth\User as AuthUser;
 
-/**
- * Matches Filament Shield's generated shape exactly (pure permission checks), so
- * `shield:generate --all` regenerates it identically rather than clobbering
- * bespoke logic.
- *
- * The "only managers may author rules" restriction therefore lives in permission
- * ASSIGNMENT — see {@see FollowUpRulePermissionSeeder}, which
- * withholds the write permissions from sales_rep.
- */
 class FollowUpRulePolicy
 {
     use HandlesAuthorization;

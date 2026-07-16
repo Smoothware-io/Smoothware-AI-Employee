@@ -303,6 +303,19 @@ seeder. The seeder is **authoritative, not additive**: it `syncPermissions()` pe
 role, so a permission removed from the matrix is actually revoked rather than
 lingering.
 
+> **`app/Policies/*` are GENERATED ARTIFACTS. Do not hand-edit them — comments
+> included.** Verified empirically (2026-07-16): running `shield:generate --all`
+> rewrote all 15 policies and **silently deleted the explanatory docblocks** that
+> had been written into two of them. The `can()` bodies survived byte-identical
+> and the RBAC suite still passed, which is exactly the point — the *logic* is
+> safe there because it is Shield's own shape, but *anything else* is not. Had the
+> role checks lived in the policy, they would have been deleted with no failing
+> test. Put reasoning here or in the seeder; never in a policy file.
+>
+> `shield:generate --all` is otherwise idempotent **once Pint has run** — Shield's
+> raw output differs from Pint's style, so the workflow after adding any resource
+> is: `shield:generate --all --panel=admin` → `pint` → `db:seed --class=RolePermissionSeeder`.
+
 ### Bundles
 
 | Bundle | Permissions | Who |
@@ -422,7 +435,23 @@ docker-compose.yml          # PostgreSQL 17 on host port 5434
   access-control matrix (every entity x role asserted in both directions, policy
   registration proven non-vacuously, DESTROY withheld from all, Role locked to
   super_admin, re-seed revokes drift)**.
-- **CI:** `.github/workflows/ci.yml` — Pint + Pest + Postgres migrate.
+- **CI:** `.github/workflows/ci.yml` — Pint + Pest (PHP 8.4 + 8.5 matrix) +
+  Postgres migrate smoke on the real `pgvector/pgvector:pg17` image.
+- **Local engine verification (2026-07-16).** The suite runs on SQLite for speed,
+  which is a good proxy but not a guarantee — constraint enforcement and query
+  planning differ. Verified against a real PostgreSQL server: all migrations
+  apply; jsonb columns (`column_mapping`, `rule_snapshot`, `conditions`)
+  round-trip; **`follow_ups.dedup_key`'s UNIQUE constraint is enforced by the
+  engine** (a raw `DB::table()->insert` bypassing all application code is rejected
+  with `SQLSTATE[23505]`); the `NoActivity` `whereDoesntHave` sweep behaves; and
+  `RolePermissionSeeder` is idempotent (180 permissions / 148 grants, stable
+  across runs). CI remains the authority on exact image fidelity (pg17).
+- **Running Postgres without Docker.** If Docker Desktop's WSL integration is
+  unavailable, a userspace cluster needs no root and matches `.env` as-is:
+  `initdb -D ~/pgdata-smoothware -U postgres --auth-local=trust --auth-host=trust`
+  then `pg_ctl -D ~/pgdata-smoothware -o "-p 5434 -k /tmp" -l ~/pgdata-smoothware/server.log start`,
+  and create the `smoothware` role + database. `docker compose up -d` stays the
+  documented path.
 
 ---
 
