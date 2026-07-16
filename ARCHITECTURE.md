@@ -14,7 +14,7 @@ stays legible as it grows.
 
 | Layer | Choice | Rationale |
 |---|---|---|
-| Framework | **Laravel 13** (PHP 8.5) | Mature, relational, batteries-included. |
+| Framework | **Laravel 13** (PHP **8.4+** floor; dev + CI also on 8.5) | Mature, relational, batteries-included. |
 | Admin/UI | **Filament 5** (TALL: Tailwind, Alpine, Livewire) | A CRM/admin-panel engine. Server-rendered; no separate SPA. Badge theming makes "AI data looks different from human data" straightforward. |
 | Database | **PostgreSQL 17** (via Docker Compose) | Fits the relational model; jsonb for KB/analysis JSON; pgvector available but deferred (§11). |
 | Auth & RBAC | **spatie/laravel-permission** + **Filament Shield** | Roles + per-resource policies. |
@@ -240,6 +240,10 @@ docker-compose.yml          # PostgreSQL 17 on host port 5434
 ---
 
 ## 11. Open decisions & compliance flags
+
+> **All legal/compliance items live in [`GO-LIVE-LEGAL.md`](GO-LIVE-LEGAL.md)** —
+> one checklist, not scattered across phase notes. The flags below are summaries;
+> that file is the source of truth.
 
 - **Jurisdiction = NL / EU (GDPR).**
   - **Right to erasure** — *done:* event log never stores PII; `CallContentEraser`
