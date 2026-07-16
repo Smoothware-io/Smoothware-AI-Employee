@@ -10,6 +10,7 @@ class DatabaseSeeder extends Seeder
     {
         $this->call([
             RoleSeeder::class,
+            RolePermissionSeeder::class, // the access-control matrix (authoritative; safe to re-run)
             AdminUserSeeder::class,
         ]);
     }

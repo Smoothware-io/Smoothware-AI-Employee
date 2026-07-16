@@ -70,7 +70,7 @@ PostgreSQL containers). `docker compose down -v` wipes the data volume.
 ## Tests
 
 ```bash
-php artisan test                    # 123 tests
+php artisan test                    # 176 tests
 ```
 
 Run on in-memory SQLite for speed and isolation; the app targets PostgreSQL. Covers

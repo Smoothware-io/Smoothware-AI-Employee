@@ -3,7 +3,7 @@
 use App\Models\FollowUp;
 use App\Models\FollowUpRule;
 use App\Models\User;
-use Database\Seeders\FollowUpRulePermissionSeeder;
+use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\RoleSeeder;
 
 /**
@@ -16,7 +16,7 @@ use Database\Seeders\RoleSeeder;
  */
 beforeEach(function () {
     $this->seed(RoleSeeder::class);
-    $this->seed(FollowUpRulePermissionSeeder::class);
+    $this->seed(RolePermissionSeeder::class);
 });
 
 function userWithRole(string $role): User
@@ -58,10 +58,17 @@ it('never grants any role permission to write the ledger by hand', function (str
     expect(userWithRole($role)->can('create', FollowUp::class))->toBeFalse();
 })->with(['sales_manager', 'sales_rep']);
 
-it('withholds every write permission from sales_rep', function () {
+it('withholds every rule-write permission from sales_rep', function () {
     $rep = userWithRole('sales_rep');
 
-    foreach (FollowUpRulePermissionSeeder::MANAGER_ONLY as $permission) {
+    $managerOnly = array_diff(
+        RolePermissionSeeder::permissionsFor('FollowUpRule', RolePermissionSeeder::MATRIX['FollowUpRule']['sales_manager']),
+        RolePermissionSeeder::permissionsFor('FollowUpRule', RolePermissionSeeder::MATRIX['FollowUpRule']['sales_rep']),
+    );
+
+    expect($managerOnly)->not->toBeEmpty(); // guard against a vacuous loop
+
+    foreach ($managerOnly as $permission) {
         expect($rep->hasPermissionTo($permission))->toBeFalse("sales_rep must not have {$permission}");
     }
 });

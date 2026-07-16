@@ -18,11 +18,11 @@ stays legible as it grows.
 |---|---|---|
 | Framework | **Laravel 13** (PHP **8.4+** floor; dev + CI also on 8.5) | Mature, relational, batteries-included. |
 | Admin/UI | **Filament 5** (TALL: Tailwind, Alpine, Livewire) | A CRM/admin-panel engine. Server-rendered; no separate SPA. Badge theming makes "AI data looks different from human data" straightforward. |
-| Database | **PostgreSQL 17** (via Docker Compose) | Fits the relational model; jsonb for KB/analysis JSON; pgvector available but deferred (§12). |
+| Database | **PostgreSQL 17** (via Docker Compose) | Fits the relational model; jsonb for KB/analysis JSON; pgvector available but deferred (§13). |
 | Auth & RBAC | **spatie/laravel-permission** + **Filament Shield** | Roles + per-resource policies. |
 | AI reasoning | **Anthropic Claude API** — Opus 4.8 / Haiku 4.5 | Generation only (no embeddings). Structured outputs for receptionist + analysis. |
 | Embeddings | **Voyage AI** (prod) / offline fake (dev/test) | Separate provider because Claude has no embeddings API. Swappable via `EmbeddingClient`. |
-| Telephony | **Sonetel** (Dutch number) | Phase 3, **POST-CALL**. Recording API (download after the call) — **no live media streaming** (§12). |
+| Telephony | **Sonetel** (Dutch number) | Phase 3, **POST-CALL**. Recording API (download after the call) — **no live media streaming** (§13). |
 | Background jobs | **Laravel Queue** (database driver → Redis/Horizon later) | Embeddings, transcription, receptionist analysis, company analysis, retention purge, CSV stage/commit. Run `php artisan queue:work`. |
 | Tests | **Pest 4** | Risky/stateful logic (state machines, RAG, grounding, disagreement, import dedup, RBAC, PII, UI render). |
 | Formatting | **Laravel Pint** | |
@@ -40,7 +40,8 @@ Four pillars built **once as infrastructure** and reused by every later phase.
 - Shield generates per-resource permissions: **run
   `php artisan shield:generate --all --panel=admin` after adding resources** — it
   creates them and assigns them to `super_admin` (the admin "bypass" is
-  permission-assignment, not a gate).
+  permission-assignment, not a gate). What `sales_manager` / `sales_rep` may do is
+  the **access-control matrix in §9** — then re-run `db:seed --class=RolePermissionSeeder`.
 - `User::canAccessPanel()` = active user + at least one role.
 
 ### 2.2 Universal event log — the backbone
@@ -54,7 +55,7 @@ Four pillars built **once as infrastructure** and reused by every later phase.
 
 ### 2.3 Soft delete everywhere
 - **`archived_at`** (not `deleted_at`) + `SoftDeletes`. Archive, never
-  hard-delete — except for GDPR erasure (§12).
+  hard-delete — except for GDPR erasure (§13).
 
 ### 2.4 AI action framework ("AI proposes → human approves → executes")
 - `ai_actions` + `AiActionService`. Lifecycle: `draft → approved → (applied)`,
@@ -93,7 +94,7 @@ badges (AI = amber); `ai_action_id` links any AI row to its approval record.
   `PromptRuleSetService.activate()` archives the prior version, audited.
 - **RAG pipeline:** `EmbeddingClient` (`Fake` / `Voyage`) → `KnowledgeChunker` →
   **`EmbedKnowledgeEntry`** queued job → `KnowledgeRetriever` (brute-force cosine
-  over published chunks, fine for a small KB, §12; top-K + scores).
+  over published chunks, fine for a small KB, §13; top-K + scores).
 - **`source_context_version`** — `ContextVersion::current()` →
   `rules:v{N}|kb:{timestamp}`, stamped on every AI record.
 
@@ -112,7 +113,7 @@ approval — **nothing is auto-created**. Reuses Phase 0 (`ai_actions`) + Phase 
 real-time media-streaming API; its Recording API downloads recordings *after* the
 call. Flow: call handled live by Sonetel IVR/voicemail/a human → recorded → we
 pull, transcribe, and draft. **"Live AI answering the call" is out of scope on
-Sonetel — §12.**
+Sonetel — §13.**
 
 **Adapters + offline fakes** (no vendor account, no API calls in CI):
 `TelephonyProvider` (`Sonetel`, UNVERIFIED shapes / `Fake`), `TranscriptionClient`
@@ -127,7 +128,7 @@ Approve runs `ReceptionistActionApplier` (creates AI-tagged Company via
 `CompanyMatcher` dedup / Contact / Note / Task, links the call, atomic).
 
 **GDPR:** consent + retention are config-driven (`config/receptionist.php`, 90-day
-placeholder) + daily `PurgeExpiredCallContent`; real values need legal sign-off (§12).
+placeholder) + daily `PurgeExpiredCallContent`; real values need legal sign-off (§13).
 
 ---
 
@@ -252,7 +253,84 @@ on `shield:generate --all`, so a hand-written role check there would be silently
 clobbered — a security regression with no failing test. `FollowUpRuleRbacTest` is
 the tripwire.
 
-## 9. Cross-cutting conventions (every new table/model)
+---
+
+## 9. Access control — the permission matrix
+
+Three roles: **`super_admin`** ("Admin"), **`sales_manager`**, **`sales_rep`**.
+Shield generates 12 permissions per entity (`Verb:Entity`) across **15 entities**
+= 180. `super_admin` gets everything from Shield and appears nowhere below.
+
+**The matrix lives in `Database\Seeders\RolePermissionSeeder::MATRIX` as
+executable data** — that class is the source of truth, this section is the
+reasoning. `RolePermissionMatrixTest` iterates the matrix itself rather than
+restating it, so doc, seeder and tests cannot drift: **adding a resource without
+deciding its access fails the suite.**
+
+### Why assignment, not policies
+
+Filament Shield **generates** the policy files (`shield:generate --all`). Any role
+logic written into a policy is silently overwritten the next time a resource is
+added — a security regression with no failing test behind it. Permission
+**assignment** survives regeneration. So policies stay exactly as Shield writes
+them (pure `$user->can('Verb:Entity')`), and every access decision lives in the
+seeder. The seeder is **authoritative, not additive**: it `syncPermissions()` per
+role, so a permission removed from the matrix is actually revoked rather than
+lingering.
+
+### Bundles
+
+| Bundle | Permissions | Who |
+|---|---|---|
+| **READ** | `ViewAny`, `View` | per matrix |
+| **WRITE** | `Create`, `Update` | per matrix |
+| **ARCHIVE** | `Delete`, `DeleteAny`, `Restore`, `RestoreAny` | per matrix — soft delete (`archived_at`), recoverable |
+| **DESTROY** | `ForceDelete`, `ForceDeleteAny` | **`super_admin` only, every entity, no exceptions** |
+| *unused* | `Replicate`, `Reorder` | nobody — nothing uses them |
+
+DESTROY is universally withheld because `archived_at` is the convention and true
+erasure runs through dedicated GDPR services (`CallContentEraser`), never a UI
+button.
+
+### The matrix
+
+| Entity | `sales_rep` | `sales_manager` | Why |
+|---|---|---|---|
+| Company | READ + WRITE | + ARCHIVE | Reps add and work prospects; removing a record of substance from view is a manager call. |
+| Contact | READ + WRITE | + ARCHIVE | " |
+| Call | READ + WRITE | + ARCHIVE | " |
+| Note | READ + WRITE + ARCHIVE | same | A rep's own workflow item — they may clean up their own mess. |
+| Task | READ + WRITE + ARCHIVE | same | " |
+| Appointment | READ + WRITE + ARCHIVE | same | " |
+| AiAction | READ + **`Update`** | + ARCHIVE | **Nobody gets `Create`** — the AI authors these; a human writing one by hand would forge provenance. `Update` **is** approve/reject, the rep's core Phase 3 job. |
+| AiRun | READ | READ | Ops log, system-written. |
+| KnowledgeEntry | READ | + WRITE + ARCHIVE | Editing the KB re-aims the AI **for the whole team** — not an IC act. |
+| PromptRuleSet | READ | + WRITE + ARCHIVE | Same, more so: this *is* the AI's instructions. |
+| FollowUpRule | READ | + WRITE + ARCHIVE | A standing rule creates work for others without their per-instance consent (§8). |
+| FollowUp | READ | READ | The ledger is recorded, never authored. |
+| Campaign | READ | + WRITE + ARCHIVE | Grouping decisions travel with imports. |
+| **Import** | READ | **WRITE, no ARCHIVE** | `Create` asserts a **GDPR lawful basis** — a legal determination, not data entry, so it is manager-only. ARCHIVE is withheld **even from managers**: an import row *is* the Art. 14 / lawful-basis audit trail ([GO-LIVE-LEGAL](GO-LIVE-LEGAL.md) item #2), and compliance evidence must not quietly vanish from view. |
+| Role (Shield) | — | — | `super_admin` only. **Load-bearing:** a manager who could grant permissions could grant themselves anything, making every row above decorative. |
+
+### Decided: no row-level scoping
+
+**Permissions are entity-level. Every authenticated user sees every company** —
+`owner_id` routes work, it does not restrict visibility. At agency scale, hiding
+accounts by owner costs more than it protects: someone must be able to cover a
+colleague's pipeline, and a manager should see everything without special-casing.
+
+Note the constraint this implies: Spatie permissions **cannot** express "a rep may
+only edit their own accounts". That would need query scoping in the policies and
+resources — a different mechanism.
+
+> **Phase 8 inherits this.** Reporting will show **all data to all authenticated
+> users, filtered only by their entity permissions — no per-owner filtering.**
+> Phase 8 should be designed against that assumption rather than re-deriving it.
+> **If it turns out to be wrong, the fix is an additive query-scoping layer on top
+> — not a rebuild:** the matrix stays as-is and scopes narrow what a permitted
+> user sees. Nothing in the current design forecloses that.
+
+## 10. Cross-cutting conventions (every new table/model)
 
 - `id`, `created_at`, `updated_at`, `archived_at` unless append-only.
 - `created_by` / `owner_id` on user-authored data.
@@ -264,7 +342,7 @@ the tripwire.
   (`EmbeddingClient`, `TelephonyProvider`, `TranscriptionClient`, `ReceptionistLlm`,
   `WebsiteAnalyzer`, `CompanyAnalysisLlm`) — build + test with no vendor account.
 
-## 10. Key paths
+## 11. Key paths
 
 ```
 app/
@@ -292,16 +370,17 @@ app/
                             #   Manual-analysis section + an AI-analysis RM; Import has a read-only preview RM
 config/{receptionist,analysis,followups}.php  # grounding, retention (placeholder),
                                              #   driver switches, follow-up window/cap
+database/seeders/RolePermissionSeeder.php  # THE access-control matrix (§9), executable
 database/{migrations,seeders,factories}/
 tests/Feature/              # + Receptionist*, InboundCallWebhook, CallRetentionPurge,
                            #   CompanyAnalysis, DisagreementDetector, CsvImport,
                            #   ImportProvenance, FollowUpAutomation, FollowUpRuleRbac,
-                           #   PanelSmoke, ...
+                           #   RolePermissionMatrix, PanelSmoke, ...
 docker-compose.yml          # PostgreSQL 17 on host port 5434
 ```
 
-## 11. Testing
-- Pest, `php artisan test` (**123 tests**). In-memory SQLite for speed (queue =
+## 12. Testing
+- Pest, `php artisan test` (**176 tests**). In-memory SQLite for speed (queue =
   sync, so jobs run inline); app targets PostgreSQL; CI runs a Postgres migrate
   smoke.
 - Covered: audit log + append-only, PII redaction, AI-action & Task state
@@ -314,12 +393,15 @@ docker-compose.yml          # PostgreSQL 17 on host port 5434
   source + lawful basis, company→import trace, unjustified-basis flag)**, and a UI
   render smoke across every resource page, **follow-up automation (trigger
   mapping, idempotency incl. the DB constraint, rule-snapshot freeze, conditions,
-  assignee strategies, per-company cap, NoActivity window) + rule-authoring RBAC**.
+  assignee strategies, per-company cap, NoActivity window), and **the full
+  access-control matrix (every entity x role asserted in both directions, policy
+  registration proven non-vacuously, DESTROY withheld from all, Role locked to
+  super_admin, re-seed revokes drift)**.
 - **CI:** `.github/workflows/ci.yml` — Pint + Pest + Postgres migrate.
 
 ---
 
-## 12. Open decisions & compliance flags
+## 13. Open decisions & compliance flags
 
 > **All legal/compliance items live in [`GO-LIVE-LEGAL.md`](GO-LIVE-LEGAL.md)** —
 > one checklist, not scattered across phase notes. The flags below are summaries;
@@ -356,7 +438,7 @@ docker-compose.yml          # PostgreSQL 17 on host port 5434
 
 ---
 
-## 13. Roadmap status
+## 14. Roadmap status
 
 | Phase | Scope | Status |
 |---|---|---|
@@ -368,4 +450,4 @@ docker-compose.yml          # PostgreSQL 17 on host port 5434
 | 5 | CSV Import (map → preview/dedup → create → queue analysis) | ✅ Done |
 | 7 | Follow-up Automation (rules → tasks; internal only) | ✅ Done |
 | 8 | Reporting (business + AI ops) | ⬜ **Next** |
-| 6 | AI Sales Representative (outbound) | ⛔ **Deferred** — blocked on the telephony constraint (§12) + telemarketing sign-off ([GO-LIVE-LEGAL](GO-LIVE-LEGAL.md) item #3). Phases 7–8 run first. |
+| 6 | AI Sales Representative (outbound) | ⛔ **Deferred** — blocked on the telephony constraint (§13) + telemarketing sign-off ([GO-LIVE-LEGAL](GO-LIVE-LEGAL.md) item #3). Phases 7–8 run first. |
