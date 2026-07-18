@@ -83,8 +83,26 @@ services:
       postgres:
         condition: service_healthy
 
-    # Dokploy's Traefik reads this. Set the domain in Dokploy's UI; these labels
-    # are the fallback if you configure the domain here instead.
+    # Traefik lives on `dokploy-network` and watches ONLY that network. A Compose
+    # deployment otherwise lands on its own project network, where Traefik cannot
+    # see it — so it never creates a router, the domain returns Traefik's own bare
+    # "404 page not found", and Let's Encrypt never issues a certificate because
+    # there is no router to issue one for. Known Dokploy behaviour:
+    # https://github.com/Dokploy/dokploy/issues/3435
+    #
+    # Only `app` joins it. worker, scheduler and postgres stay on the internal
+    # network — nothing outside should be able to reach a queue worker or a
+    # database holding call transcripts.
+    networks:
+      - default
+      - dokploy-network
+
+    labels:
+      # Tells Traefik which of this container's networks to route to. Without it,
+      # a container on two networks is a coin flip, and it lands on the internal
+      # one about half the time — which presents as an intermittent 502.
+      - "traefik.docker.network=dokploy-network"
+
     expose:
       - "80"
 
@@ -236,6 +254,16 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
+networks:
+  # Created by Dokploy itself, not by this file — hence `external`. If a deploy
+  # fails with "network dokploy-network not found", Dokploy is not installed on
+  # that host, or this stack is being run somewhere Dokploy is not.
+  dokploy-network:
+    external: true
+
+  # Everything else talks over this. Postgres is reachable here and nowhere else.
+  default:
 
 volumes:
   postgres-data:
