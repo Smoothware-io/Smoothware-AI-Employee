@@ -669,7 +669,116 @@ docker-compose.yml          # PostgreSQL 17 on host port 5434
 
 ---
 
-## 15. Roadmap status
+## 15. Live-voice runtime & scaling architecture (Phase 6)
+
+> **Realised 2026-07-18.** Live AI is no longer a design on paper: a call reaches
+> the AI, it answers grounded in the KB, and it hangs up with a transcript stored.
+> Both directions work — inbound (you call the number) and an outbound rehearsal
+> (the AI rings a softphone and pitches). This section is the runtime that made it
+> real and the shape it should grow into. It supersedes the §14 *shape 4* sketch.
+>
+> **Correction to §14:** the "Sonetel number → SIP forward → OpenAI" path (shape 4)
+> does **not** work — Sonetel rejects forwarding a number to an external SIP URI,
+> verified against both their API and UI. The realised path puts **Asterisk** in
+> the middle as a translator, because Sonetel requires the SIP user part to be a
+> DID while OpenAI requires it to be the `proj_...` id — mutually exclusive, and
+> Asterisk is the only thing that can address both.
+
+### 15.1 The runtime that works
+
+```
+caller ─▶ carrier/softphone ─SIP▶ Asterisk ─SIP/TLS▶ OpenAI Realtime  (carries the voice)
+                                    │                    │ control WebSocket
+                                    │                    ▼
+                                    │                go-voice  (the AI's hands)
+                                    │                    │ HTTPS + service token
+                                    │                    ▼
+                                    └── webhook ──▶ Laravel  (the brain: config, tools, data)
+```
+
+- **OpenAI carries the media.** Lowest latency, zero maintenance. Asterisk dials
+  `sip:proj_...@sip.api.openai.com` and audio is Asterisk↔OpenAI directly.
+- **Laravel is the brain.** Its webhook (`OpenAiRealtimeWebhookController`) accepts
+  the call, supplies KB-grounded instructions + versioned rules + the tool
+  declarations + turn-taking (semantic VAD). The single DB-write path.
+- **go-voice is the hands** (separate repo, `smoothware-voice-sip/go-voice`). It
+  rides OpenAI's *control* WebSocket per call, turns function calls into CRM
+  actions by forwarding `{call_id, name, arguments}` to Laravel's `/api/voice/tool`,
+  and reports the transcript on hang-up. It replaces the PHP `ObserveRealtimeCall`.
+
+### 15.2 The three properties that make it scale — protect them
+
+1. **Brain vs hands.** All business logic and the one DB-write path live in
+   Laravel; go-voice is dumb transport. Adding a tool (`reschedule`, `send_brochure`)
+   is a **Laravel-only** change — the gateway never learns it happened, never
+   redeploys for it. This is the top maintainability decision; do not erode it.
+2. **Stateless per call.** Each call is an independent goroutine; nothing is shared
+   between calls. That single property is what lets go-voice scale horizontally to
+   any number — run more instances, no coordination, no shared cache to invalidate.
+3. **Media stays with OpenAI.** The moment you carry audio yourself (ElevenLabs)
+   you own jitter buffers, 8 kHz→24 kHz transcoding and barge-in forever. Keep that
+   as a **separate future media service** (a second *mode*), never bolted into the
+   control gateway. ElevenLabs is a media-path decision, not a config flag.
+
+### 15.3 Target topology — two planes, two hosts
+
+| Plane | Runs | Exposure |
+|---|---|---|
+| **Application** (Dokploy box) | Laravel (web/worker/scheduler), Postgres, `go-voice`, Redis (when needed) | Laravel public via Traefik; **go-voice internal-only** on `dokploy-network` (`voice-gateway:8080`, no public port) |
+| **Telephony** (its own box) | Asterisk, fail2ban, patched often | Public SIP; nothing else |
+
+**Split Asterisk onto its own host — but on a trigger, not a calendar:** *the week a
+real carrier trunk goes live.* Three reasons it must not sit beside the CRM then:
+security blast radius (public SIP + toll-fraud surface next to customer PII), fault
+isolation (Asterisk crash ≠ CRM down), and independent scaling (more calls = more
+Asterisk nodes; more CRM users = touch nothing). Until `TRUNK_ENABLED=true` there
+is no PSTN route and nothing to steal, so **one box is correct today.** The
+telephony box needs no Dokploy — it is one `docker compose up` — ~€5/mo, and the
+split is a 20-minute job because the repo is self-contained.
+
+**Placement rule:** `go-voice` belongs on the **application** plane, next to
+Laravel/Postgres — its latency-sensitive hop is the tool call to the DB (sub-ms on
+the same network); its hop to OpenAI is over the internet regardless.
+
+### 15.4 What to add — and precisely when
+
+| Add | Trigger | Why |
+|---|---|---|
+| **`tenant_id` on every table** | now, while young | "Different accounts" = multi-tenancy. Single DB, row-level scoping — **not** DB-per-tenant. Cheap now, brutal to retrofit. |
+| **`call_id` correlation** in every log across Asterisk / go-voice / Laravel | now | We debugged a distributed call blind for a day. One id end-to-end makes it traceable. |
+| **Redis** | at outbound campaigns | The outbound dialer **queue + rate limiting** (dial N/min, respect caps) and fan-out. **Not** in the tool path — that stays synchronous HTTP; the caller waits in silence. |
+| **pgbouncer** | when PHP connection count is measured to bite | Pooling. Not before a metric says so. |
+| **A 2nd `go-voice` instance** | when one is actually loaded | One handles hundreds. Scale on a metric, not a hunch. |
+
+### 15.5 What NOT to add (the senior part)
+
+At the stated target (~100 concurrent), **Dokploy + Compose on one–two VPS is
+correct.** Kubernetes, Kafka, gRPC, a service mesh, microservice-per-tool,
+DB-per-tenant — every one is complexity you would maintain at 2 am to solve a scale
+you do not have. The stateless-per-call design means the eventual jump is "run more
+instances," not a rewrite. Add the boxes above **when a metric demands it**, and
+not before.
+
+### 15.6 The tool contract (Laravel ↔ go-voice)
+
+One stable seam, mutual-token authenticated:
+
+- **hand-off:** Laravel, after accepting a call, `POST voice-gateway/calls`
+  `{call_id, company_id?, context_version}`.
+- **tool:** go-voice `POST /api/voice/tool` `{call_id, name, arguments}` → `{output}`.
+  Laravel maps the name to an action (availability / book / note) and returns the
+  model-visible result. New tools live only here.
+- **transcript:** go-voice `POST /api/voice/transcript` on hang-up → the same
+  encrypted, retention-tracked column the PHP observer used (§3, §14 erasure).
+
+The **still-outstanding wiring** (next build): declare the tools in the accept
+payload, implement `/api/voice/*`, and swap `ObserveRealtimeCall::dispatch` for the
+hand-off. Until then a call connects and captures transcript; a tool call returns
+an error the AI voices gracefully.
+
+---
+
+## 16. Roadmap status
 
 | Phase | Scope | Status |
 |---|---|---|
