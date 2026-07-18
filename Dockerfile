@@ -22,32 +22,22 @@ RUN npm install
 COPY vite.config.js ./
 COPY resources ./resources
 
-# NOTE: vite.config.js pulls fonts from Bunny at build time. This needs network
-# access during the build — fine on Dokploy, a surprise in an air-gapped builder.
+# NOTE: vite.config.js pulls fonts from Bunny at build time, so this needs network
+# access in the builder — fine on Dokploy, a surprise in an air-gapped one.
 RUN npm run build
 
-# --- Stage 2: PHP dependencies -------------------------------------------------
-FROM composer:2 AS vendor
-
-WORKDIR /app
-
-COPY composer.json composer.lock ./
-
-# --no-scripts: artisan post-install hooks need the full app tree, which is not
-# here yet. They run in the final stage.
-# --no-dev: Pest, Pint and the debug tooling have no business in production.
-RUN composer install \
-        --no-dev \
-        --no-scripts \
-        --no-autoloader \
-        --prefer-dist \
-        --no-interaction
-
-# --- Stage 3: runtime ----------------------------------------------------------
+# --- Stage 2: runtime (and dependency install) ---------------------------------
+#
+# Composer runs HERE rather than in a separate `composer:2` stage, and that is not
+# a style choice: the composer image is minimal Alpine PHP with no ext-intl, and
+# filament/support hard-requires it. `composer install` there fails at the
+# platform check before downloading anything. Installing in the image that
+# actually has the extensions means the platform check tells the truth.
 FROM dunglas/frankenphp:1-php8.4
 
 # pdo_pgsql  — the database
-# intl       — Laravel/Filament formatting; Carbon and number formatting need it
+# intl       — REQUIRED by filament/support. Its absence is what broke the first
+#              build; it is not optional and not merely a nicety.
 # zip, gd    — Filament file and image handling
 # pcntl      — the queue worker's graceful-shutdown signals. Without it a deploy
 #              kills a worker mid-job instead of letting it finish the current one.
@@ -63,15 +53,28 @@ RUN install-php-extensions \
         pcntl \
         opcache
 
-WORKDIR /app
-
-COPY --from=vendor /app/vendor ./vendor
-COPY . .
-COPY --from=assets /app/public/build ./public/build
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
-# Now the full tree is present: optimised autoloader plus the package-discovery
-# scripts skipped in stage 2.
+WORKDIR /app
+
+# Dependencies before application code, so this layer is reused on every deploy
+# that does not touch composer.json/lock — which is most of them.
+#
+# --no-scripts: artisan post-install hooks need the full app tree, which is not
+# here yet. They run below, once it is.
+# --no-dev: Pest, Pint and the debug tooling have no business in production.
+COPY composer.json composer.lock ./
+RUN composer install \
+        --no-dev \
+        --no-scripts \
+        --no-autoloader \
+        --prefer-dist \
+        --no-interaction
+
+COPY . .
+COPY --from=assets /app/public/build ./public/build
+
+# Full tree present: optimised autoloader plus the package discovery skipped above.
 RUN composer dump-autoload --no-dev --optimize --classmap-authoritative \
     && php artisan package:discover --ansi
 
