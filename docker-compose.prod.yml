@@ -107,13 +107,21 @@ services:
       - "80"
 
     healthcheck:
-      # Laravel's built-in health endpoint. Checks the framework booted — not
+      # Laravel's built-in health endpoint — proves the framework booted, not
       # merely that a process is alive.
-      test: ["CMD", "curl", "-fsS", "http://127.0.0.1/up"]
+      #
+      # Uses PHP, not curl. curl is not guaranteed to be in this image, and a
+      # healthcheck whose BINARY is missing fails forever: the container never
+      # becomes healthy, Traefik refuses to route to an unhealthy container, and
+      # the domain answers 404 while the app underneath is perfectly fine. PHP is
+      # the one binary a PHP image certainly has.
+      test: ["CMD", "php", "-r", "exit(@file_get_contents('http://127.0.0.1/up') === false ? 1 : 0);"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 60s
+      # Generous: the first boot waits for Postgres, migrates, and builds four
+      # caches before it serves anything.
+      start_period: 120s
 
     logging:
       driver: json-file
