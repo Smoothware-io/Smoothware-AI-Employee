@@ -1,0 +1,243 @@
+# Production stack for Dokploy.
+#
+# The dev compose file (docker-compose.yml) stays as it is — it runs only
+# Postgres, with the app on the host via `php artisan serve`. This one runs
+# everything.
+#
+# Point Dokploy at THIS file: Compose service -> Compose Path -> docker-compose.prod.yml
+#
+# Three containers from one image, differing only by command:
+#   app        — serves HTTP behind Traefik, and the OpenAI webhook
+#   worker     — queue jobs (ObserveRealtimeCall, imports, analysis)
+#   scheduler  — Laravel's scheduler (follow-up rules, token refresh)
+#
+# Why a worker at all: ObserveRealtimeCall holds a WebSocket open for the whole
+# call to capture the transcript. Run that in the web container and it occupies a
+# request thread for minutes. It is queued for a reason.
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: smoothware/ai-employee:latest
+    restart: unless-stopped
+
+    environment:
+      APP_NAME: "Smoothware AI Employee"
+      APP_ENV: production
+      APP_DEBUG: "false"
+      APP_KEY: ${APP_KEY:?APP_KEY must be set — see docker/entrypoint.sh}
+      APP_URL: ${APP_URL:?APP_URL must be set}
+
+      # Only this container migrates. See entrypoint.sh.
+      RUN_MIGRATIONS: "true"
+
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_DATABASE: ${DB_DATABASE:-smoothware}
+      DB_USERNAME: ${DB_USERNAME:-smoothware}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set}
+
+      # Database-backed, so no Redis to run or secure. At this volume the
+      # difference is not measurable, and it is one less service to patch.
+      QUEUE_CONNECTION: database
+      CACHE_STORE: database
+      SESSION_DRIVER: database
+
+      LOG_CHANNEL: stderr
+      LOG_LEVEL: ${LOG_LEVEL:-warning}
+
+      # --- Providers. Absent = the offline fake, which is the safe default. ---
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      LLM_DRIVER: ${LLM_DRIVER:-fake}
+      ANALYSIS_LLM_DRIVER: ${ANALYSIS_LLM_DRIVER:-fake}
+      WEBSITE_ANALYZER_DRIVER: ${WEBSITE_ANALYZER_DRIVER:-fake}
+      EMBEDDINGS_DRIVER: ${EMBEDDINGS_DRIVER:-fake}
+      VOYAGE_API_KEY: ${VOYAGE_API_KEY:-}
+      PAGESPEED_API_KEY: ${PAGESPEED_API_KEY:-}
+
+      # --- OpenAI Realtime: the voice ---
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_PROJECT_ID: ${OPENAI_PROJECT_ID:-}
+      OPENAI_WEBHOOK_SECRET: ${OPENAI_WEBHOOK_SECRET:-}
+      OPENAI_REALTIME_VOICE: ${OPENAI_REALTIME_VOICE:-alloy}
+
+      # --- Outbound. Every one of these fails closed. ---
+      # OUTBOUND_ENABLED stays false until counsel has answered the ZZP'er
+      # question (GO-LIVE-LEGAL.md #3). Deploying is not the same as enabling.
+      OUTBOUND_ENABLED: ${OUTBOUND_ENABLED:-false}
+      OUTBOUND_ORIGINATOR: ${OUTBOUND_ORIGINATOR:-fake}
+      OUTBOUND_TEST_NUMBERS: ${OUTBOUND_TEST_NUMBERS:-}
+      OUTBOUND_REGISTER_SCREENING: ${OUTBOUND_REGISTER_SCREENING:-none}
+      ASTERISK_AMI_HOST: ${ASTERISK_AMI_HOST:-127.0.0.1}
+      ASTERISK_AMI_SECRET: ${ASTERISK_AMI_SECRET:-}
+
+    volumes:
+      # Only what must outlive a deploy. The app tree is baked into the image.
+      - app-storage:/app/storage/app
+      - app-logs:/app/storage/logs
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    # Dokploy's Traefik reads this. Set the domain in Dokploy's UI; these labels
+    # are the fallback if you configure the domain here instead.
+    expose:
+      - "80"
+
+    healthcheck:
+      # Laravel's built-in health endpoint. Checks the framework booted — not
+      # merely that a process is alive.
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1/up"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: smoothware/ai-employee:latest
+    restart: unless-stopped
+
+    # Inherits the app's environment via Dokploy; RUN_MIGRATIONS deliberately
+    # absent so this container never races the schema.
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+      APP_KEY: ${APP_KEY:?APP_KEY must be set}
+      APP_URL: ${APP_URL:?APP_URL must be set}
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_DATABASE: ${DB_DATABASE:-smoothware}
+      DB_USERNAME: ${DB_USERNAME:-smoothware}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set}
+      QUEUE_CONNECTION: database
+      CACHE_STORE: database
+      SESSION_DRIVER: database
+      LOG_CHANNEL: stderr
+      LOG_LEVEL: ${LOG_LEVEL:-warning}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      LLM_DRIVER: ${LLM_DRIVER:-fake}
+      ANALYSIS_LLM_DRIVER: ${ANALYSIS_LLM_DRIVER:-fake}
+      WEBSITE_ANALYZER_DRIVER: ${WEBSITE_ANALYZER_DRIVER:-fake}
+      EMBEDDINGS_DRIVER: ${EMBEDDINGS_DRIVER:-fake}
+      VOYAGE_API_KEY: ${VOYAGE_API_KEY:-}
+      PAGESPEED_API_KEY: ${PAGESPEED_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_PROJECT_ID: ${OPENAI_PROJECT_ID:-}
+      OPENAI_WEBHOOK_SECRET: ${OPENAI_WEBHOOK_SECRET:-}
+      OUTBOUND_ENABLED: ${OUTBOUND_ENABLED:-false}
+      OUTBOUND_ORIGINATOR: ${OUTBOUND_ORIGINATOR:-fake}
+
+    # --max-time recycles the worker hourly, which caps the damage from any slow
+    # memory leak in a long-lived PHP process.
+    # --tries=3 with backoff: an OpenAI hiccup should not lose a transcript.
+    command: ["php", "artisan", "queue:work", "--tries=3", "--backoff=10", "--max-time=3600", "--sleep=1"]
+
+    volumes:
+      - app-storage:/app/storage/app
+      - app-logs:/app/storage/logs
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: smoothware/ai-employee:latest
+    restart: unless-stopped
+
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+      APP_KEY: ${APP_KEY:?APP_KEY must be set}
+      APP_URL: ${APP_URL:?APP_URL must be set}
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_DATABASE: ${DB_DATABASE:-smoothware}
+      DB_USERNAME: ${DB_USERNAME:-smoothware}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set}
+      QUEUE_CONNECTION: database
+      CACHE_STORE: database
+      SESSION_DRIVER: database
+      LOG_CHANNEL: stderr
+      LOG_LEVEL: ${LOG_LEVEL:-warning}
+      OUTBOUND_ENABLED: ${OUTBOUND_ENABLED:-false}
+      OUTBOUND_ORIGINATOR: ${OUTBOUND_ORIGINATOR:-fake}
+
+    # `schedule:work` is the container-native form: a foreground process that
+    # ticks every minute. No cron daemon inside the image.
+    command: ["php", "artisan", "schedule:work"]
+
+    volumes:
+      - app-logs:/app/storage/logs
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  postgres:
+    # pgvector = Postgres 17 + the vector extension. Not enabled yet (RAG uses
+    # brute-force cosine in PHP, ARCHITECTURE §8) but it makes adopting pgvector
+    # a one-liner rather than a migration to a different image.
+    image: pgvector/pgvector:pg17
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_DB: ${DB_DATABASE:-smoothware}
+      POSTGRES_USER: ${DB_USERNAME:-smoothware}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set}
+
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+    # NOT published to the host. The app reaches it over the compose network.
+    # A Postgres port on a public IP is found by scanners within hours, and this
+    # one holds contact details and call transcripts.
+    expose:
+      - "5432"
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-smoothware} -d ${DB_DATABASE:-smoothware}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  postgres-data:
+  app-storage:
+  app-logs:

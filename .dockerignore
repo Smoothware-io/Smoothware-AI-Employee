@@ -1,0 +1,40 @@
+# Keep secrets and local state out of the build context.
+#
+# .env first and foremost: it holds real API keys, and the Dockerfile does
+# `COPY . .`. Without this line those keys are baked into every layer of the
+# image and travel with it to any registry it is pushed to.
+.env
+.env.*
+!.env.example
+
+# Rebuilt inside the image
+/vendor
+/node_modules
+/public/build
+/public/hot
+/public/storage
+
+# Local runtime state — must not overwrite the container's
+/storage/*.key
+/storage/framework/cache/*
+/storage/framework/sessions/*
+/storage/framework/views/*
+/storage/logs/*
+/bootstrap/cache/*
+
+# Dev-only
+/tests
+/.github
+/.git
+/.idea
+/.vscode
+.phpunit.result.cache
+phpunit.xml
+pint.json
+docker-compose.yml
+README.md
+*.md
+!GO-LIVE-LEGAL.md
+
+# Local Postgres cluster, if it ever lands in the tree
+pgdata*
