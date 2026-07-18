@@ -78,6 +78,28 @@ class OpenAiRealtimeWebhookController extends Controller
                 'model' => config('outbound.openai.model'),
                 'instructions' => $built['instructions'],
                 'audio' => [
+                    'input' => [
+                        // Turn-taking. Without this OpenAI uses basic server VAD,
+                        // which on a phone line cuts people off and — worse — can
+                        // treat the tail of its OWN speech (echoed back through a
+                        // speaker) as an interruption and loop.
+                        //
+                        // semantic_vad decides you are DONE talking from meaning,
+                        // not just from a silence gap, so it does not jump on a
+                        // mid-sentence pause and is far less fooled by echo.
+                        //
+                        //   eagerness: how fast it decides you have finished.
+                        //     low    waits longest (~8s)  — most patient, most lag
+                        //     medium ~4s (a good default for a sales call)
+                        //     high   ~2s — snappy, but talks over slow speakers
+                        'turn_detection' => [
+                            'type' => 'semantic_vad',
+                            'eagerness' => config('outbound.openai.vad_eagerness', 'medium'),
+                            // Let the caller barge in and have the AI stop cleanly.
+                            'interrupt_response' => true,
+                            'create_response' => true,
+                        ],
+                    ],
                     'output' => ['voice' => config('outbound.openai.voice')],
                 ],
             ]);
