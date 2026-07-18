@@ -8,6 +8,8 @@ use App\Models\Call;
 use App\Models\Company;
 use App\Services\EventLogger;
 use App\Services\Outbound\CallInstructionBuilder;
+use App\Services\Voice\VoiceGateway;
+use App\Services\Voice\VoiceToolRegistry;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Http;
@@ -35,6 +37,8 @@ class OpenAiRealtimeWebhookController extends Controller
     public function __construct(
         private CallInstructionBuilder $instructions,
         private EventLogger $events,
+        private VoiceToolRegistry $tools,
+        private VoiceGateway $gateway,
     ) {}
 
     public function __invoke(Request $request): Response
@@ -102,6 +106,14 @@ class OpenAiRealtimeWebhookController extends Controller
                     ],
                     'output' => ['voice' => config('outbound.openai.voice')],
                 ],
+                // The AI's hands. Declared ONLY when go-voice is configured to
+                // execute them (ARCHITECTURE §15.6): a tool the gateway cannot run
+                // leaves the model calling into a void, waiting on a result that
+                // never comes. No gateway -> no tools -> the AI talks but does not
+                // act, and the PHP observer runs instead.
+                ...($this->gateway->configured()
+                    ? ['tools' => $this->tools->schemas(), 'tool_choice' => 'auto']
+                    : []),
             ]);
 
         if ($accepted->failed()) {
@@ -131,10 +143,21 @@ class OpenAiRealtimeWebhookController extends Controller
             companyId: $company?->getKey(),
         );
 
-        // Ride along and write down what is said. Queued, because this webhook
-        // must answer in milliseconds while the observer holds a socket open for
-        // the whole conversation.
-        ObserveRealtimeCall::dispatch($callId, $call?->getKey());
+        // Who rides along on the live call. Exactly one:
+        //   - go-voice (Go control gateway) when configured: executes tool calls
+        //     AND captures the transcript. The AI has hands.
+        //   - the PHP observer otherwise: transcript only, no actions. A clean
+        //     fallback so a missing or undeployed gateway never kills a call.
+        if ($this->gateway->configured()) {
+            $this->gateway->handOff($callId, [
+                'company_id' => $company?->getKey(),
+                'context_version' => $built['context_version'],
+            ]);
+        } else {
+            // Queued: the webhook must answer in milliseconds while the observer
+            // holds a socket open for the whole conversation.
+            ObserveRealtimeCall::dispatch($callId, $call?->getKey());
+        }
 
         return response('ok', 200);
     }

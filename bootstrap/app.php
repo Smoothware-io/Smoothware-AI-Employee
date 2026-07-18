@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\VerifyVoiceServiceToken;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -28,10 +29,18 @@ return Application::configure(basePath: dirname(__DIR__))
         // would let anyone spoof X-Forwarded-For.
         $middleware->trustProxies(at: '*');
 
-        // Telephony webhooks are server-to-server; they authenticate via a
-        // provider signature/secret, not a session CSRF token.
+        // Server-to-server endpoints that authenticate with a signature or a
+        // shared token, not a session CSRF cookie: telephony webhooks and the
+        // voice tool API that go-voice calls.
         $middleware->validateCsrfTokens(except: [
             'webhooks/*',
+            'api/voice/*',
+        ]);
+
+        // Guards the voice tool API. Registered as an alias here; applied on the
+        // routes in web.php.
+        $middleware->alias([
+            'voice.token' => VerifyVoiceServiceToken::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
