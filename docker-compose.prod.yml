@@ -94,8 +94,20 @@ services:
     # network — nothing outside should be able to reach a queue worker or a
     # database holding call transcripts.
     networks:
-      - default
-      - dokploy-network
+      default: {}
+      dokploy-network:
+        # An alias so go-voice can reach the CRM INTERNALLY at http://crm-app,
+        # rather than hairpinning out to the public domain and back in through
+        # Traefik. That matters on this path specifically: a tool call happens
+        # mid-conversation with the caller waiting in silence, so a public
+        # round-trip plus a TLS handshake is latency a human hears. It also keeps
+        # the traffic on the host and removes a dependency on public DNS and a
+        # healthy certificate just for two of our own services to talk.
+        #
+        # The hand-off already goes the other way internally
+        # (http://voice-gateway:8080); this makes the pair symmetric.
+        aliases:
+          - crm-app
 
     labels:
       # Tells Traefik which of this container's networks to route to. Without it,
