@@ -52,9 +52,24 @@ echo "Database is up."
 # RUN_MIGRATIONS is set only on the web service. If the worker and scheduler ran
 # migrations too, three containers would race the same schema change on every
 # deploy — which is how you get a half-applied migration and a lock nobody owns.
+#
+# NOT `--isolated`, and this is the bug that crash-looped the first deploy:
+# --isolated takes its lock through the CACHE driver, and CACHE_STORE=database
+# puts that lock in `cache_locks` — a table that does not exist until migrations
+# have run. The lock is acquired before the migration that creates it:
+#
+#   SQLSTATE[42P01]: Undefined table: relation "cache_locks" does not exist
+#
+# On a fresh database that is unconditional. The app container died, and the
+# worker died with it because `queue:work` found no `jobs` table, while the
+# scheduler stayed up because it migrates nothing — which is exactly the
+# three-container pattern that pointed here.
+#
+# --isolated was belt-and-braces anyway: RUN_MIGRATIONS is true on one service,
+# so there is nothing to be isolated from.
 if [ "${RUN_MIGRATIONS:-false}" = "true" ]; then
     echo "Running migrations..."
-    php artisan migrate --force --isolated || {
+    php artisan migrate --force || {
         echo "FATAL: migrations failed — refusing to serve." >&2
         exit 1
     }
