@@ -45,4 +45,26 @@ return [
         'horizon_days' => (int) env('VOICE_BOOKING_HORIZON_DAYS', 14),
     ],
 
+    /*
+    | Where to file work from a caller we do not recognise.
+    |
+    | An inbound call has no company until a human matches it — that is not a
+    | test artefact, it is the normal case for a stranger ringing the number. On
+    | the first real call the AI correctly refused to book ("I could not find
+    | which company this call is for") and offered a KB alternative instead. Safe,
+    | but it means a genuine lead's request is lost the moment they hang up.
+    |
+    | So: one designated holding company. Created LAZILY — only when a tool
+    | actually needs it, so calls where nothing is booked leave no junk behind —
+    | and linked to the Call, so the appointment, the note and the call all point
+    | at the same record for a human to re-assign later.
+    |
+    | Set enabled=false to go back to refusing, if filing under "unknown" is ever
+    | worse than not booking at all.
+    */
+    'fallback_company' => [
+        'enabled' => (bool) env('VOICE_FALLBACK_COMPANY_ENABLED', true),
+        'name' => env('VOICE_FALLBACK_COMPANY_NAME', 'Onbekende beller'),
+    ],
+
 ];

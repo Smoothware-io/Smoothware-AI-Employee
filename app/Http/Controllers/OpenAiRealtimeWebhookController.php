@@ -103,6 +103,19 @@ class OpenAiRealtimeWebhookController extends Controller
                             'interrupt_response' => true,
                             'create_response' => true,
                         ],
+                        // Transcribe the CALLER too. Without this OpenAI transcribes
+                        // only its own speech, and the stored transcript reads as a
+                        // monologue — every line "AI:", none "CALLER:". Confirmed on a
+                        // real call before this was added, and it makes the record
+                        // useless for review, which is most of why we keep one.
+                        //
+                        // whisper-1 rather than gpt-4o-transcribe: the newer models
+                        // have reported failures in realtime sessions where whisper-1
+                        // is unaffected. Configurable so it can move without a deploy
+                        // once that settles.
+                        'transcription' => [
+                            'model' => config('outbound.openai.transcription_model', 'whisper-1'),
+                        ],
                     ],
                     'output' => ['voice' => config('outbound.openai.voice')],
                 ],

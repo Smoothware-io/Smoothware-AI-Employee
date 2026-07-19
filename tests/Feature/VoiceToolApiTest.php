@@ -117,3 +117,68 @@ it('accepts arguments as a JSON string, the way OpenAI sends them', function () 
 
     expect(Note::where('body', 'From a JSON string.')->exists())->toBeTrue();
 });
+
+/**
+ * A stranger ringing the number has no company until a human matches them. That
+ * is the normal inbound case, and on the first real call the AI correctly refused
+ * to book because of it — safe, but the lead's request died at hang-up.
+ */
+it('files work from an unknown caller against the fallback company', function () {
+    $orphan = Call::create([
+        'direction' => 'inbound',
+        'status' => 'in_progress',
+        'external_provider' => 'openai-realtime',
+        'external_id' => 'rtc_no_company',
+        'started_at' => now(),
+    ]);
+
+    tool([
+        'call_id' => 'rtc_no_company',
+        'name' => 'add_note',
+        'arguments' => ['body' => 'Wants a mobile app.'],
+    ])->assertOk()->assertJsonPath('output', fn ($o) => str_contains($o, 'saved'));
+
+    $fallback = Company::where('name', config('voice.fallback_company.name'))->first();
+    expect($fallback)->not->toBeNull()
+        // A filing cabinet the system opened, not the AI claiming this company
+        // exists in the world.
+        ->and($fallback->source)->toBe(RecordSource::System);
+
+    // The call is linked to it too, so the note and the call agree rather than
+    // leaving a human two orphans to reconcile.
+    expect($orphan->fresh()->company_id)->toBe($fallback->getKey());
+    expect(Note::where('company_id', $fallback->getKey())->exists())->toBeTrue();
+});
+
+it('reuses one fallback company rather than creating one per call', function () {
+    foreach (['rtc_a', 'rtc_b'] as $id) {
+        Call::create([
+            'direction' => 'inbound',
+            'status' => 'in_progress',
+            'external_provider' => 'openai-realtime',
+            'external_id' => $id,
+            'started_at' => now(),
+        ]);
+
+        tool(['call_id' => $id, 'name' => 'add_note', 'arguments' => ['body' => 'hi']])->assertOk();
+    }
+
+    expect(Company::where('name', config('voice.fallback_company.name'))->count())->toBe(1);
+});
+
+it('still refuses when the fallback is switched off', function () {
+    config(['voice.fallback_company.enabled' => false]);
+
+    Call::create([
+        'direction' => 'inbound',
+        'status' => 'in_progress',
+        'external_provider' => 'openai-realtime',
+        'external_id' => 'rtc_strict',
+        'started_at' => now(),
+    ]);
+
+    tool(['call_id' => 'rtc_strict', 'name' => 'add_note', 'arguments' => ['body' => 'x']])
+        ->assertOk()->assertJsonPath('output', fn ($o) => str_contains($o, 'error'));
+
+    expect(Note::count())->toBe(0);
+});

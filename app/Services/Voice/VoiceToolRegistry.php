@@ -7,6 +7,7 @@ use App\Enums\NoteCategory;
 use App\Enums\RecordSource;
 use App\Models\Appointment;
 use App\Models\Call;
+use App\Models\Company;
 use App\Models\Note;
 use Illuminate\Support\Carbon;
 use RuntimeException;
@@ -180,7 +181,7 @@ class VoiceToolRegistry
      */
     private function bookAppointment(array $args, ?Call $call): array
     {
-        $company = $call?->company;
+        $company = $this->resolveCompany($call);
         if ($company === null) {
             // Honest failure: no company means nowhere to hang the meeting.
             throw new RuntimeException('I could not find which company this call is for, so I cannot book yet.');
@@ -218,7 +219,7 @@ class VoiceToolRegistry
      */
     private function addNote(array $args, ?Call $call): array
     {
-        $company = $call?->company;
+        $company = $this->resolveCompany($call);
         if ($company === null) {
             throw new RuntimeException('I could not find which company this call is for, so I cannot save that.');
         }
@@ -236,6 +237,45 @@ class VoiceToolRegistry
         ]);
 
         return ['saved' => true];
+    }
+
+    /**
+     * Which company does this call's work belong to?
+     *
+     * A stranger ringing the number has no company until a human matches them —
+     * the normal case for inbound, not a test artefact. Refusing outright is
+     * safe but loses a real lead's request the moment they hang up, so work is
+     * filed against one designated holding company instead.
+     *
+     * Created LAZILY, and only here: a call where the AI books nothing leaves no
+     * junk company behind. The Call is linked to it as well, so the appointment,
+     * the note and the call all point at the same record for a human to
+     * re-assign later rather than three orphans.
+     */
+    private function resolveCompany(?Call $call): ?Company
+    {
+        if ($call?->company !== null) {
+            return $call->company;
+        }
+
+        if (! config('voice.fallback_company.enabled', true)) {
+            return null;
+        }
+
+        $company = Company::firstOrCreate(
+            ['name' => (string) config('voice.fallback_company.name', 'Onbekende beller')],
+            // System, not Ai: this is a filing cabinet the system opened, not the
+            // AI asserting that a company by this name exists in the world.
+            ['source' => RecordSource::System],
+        );
+
+        // Link it back so the call and everything booked on it agree.
+        if ($call !== null && $call->company_id === null) {
+            $call->forceFill(['company_id' => $company->getKey()])->saveQuietly();
+            $call->setRelation('company', $company);
+        }
+
+        return $company;
     }
 
     private function parseDate(?string $value): ?Carbon
