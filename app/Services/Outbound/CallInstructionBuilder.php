@@ -49,6 +49,7 @@ class CallInstructionBuilder
         ?Company $company,
         ?string $objective = null,
         CallDirection $direction = CallDirection::Outbound,
+        bool $withTools = false,
     ): array {
         $inbound = $direction === CallDirection::Inbound;
         $topic = $this->topic($company, $objective);
@@ -106,12 +107,43 @@ class CallInstructionBuilder
         HARDE GRENZEN
         - Verzin niets. Staat het niet hierboven, dan weet je het niet. Zeg dat gewoon.
         - Noem NOOIT een prijs, tarief of schatting. Verwijs naar het gratis gesprek van 30 minuten.
-        - Beloof geen deadlines, resultaten of beschikbaarheid.
+        - Beloof geen deadlines of resultaten.
         - Vraagt iemand om niet meer gebeld te worden: bevestig dat direct, zeg dat je het vastlegt,
           en beëindig het gesprek beleefd. Dit heeft voorrang op elk ander doel.
         - Bij twijfel, een klacht, of iets buiten de kennisbank: draag over aan een mens.
         - Spreek Nederlands, tenzij de ander Engels spreekt.
         TXT;
+
+        // Only when the gateway is live to execute them. Telling the model it can
+        // book while nothing can carry out the call would be a worse lie than
+        // saying it cannot.
+        //
+        // This section exists because the first real call exposed a contradiction:
+        // the AI politely said "I can't book meetings directly" and pointed at the
+        // website — exactly what the HARDE GRENZEN above told it to do. The limits
+        // were written when the AI had no hands. Declaring a tool is not enough if
+        // the prose still says the opposite; the model believes the prose.
+        //
+        // Note it comes AFTER the limits, deliberately: last word on the subject.
+        if ($withTools) {
+            $sections[] = <<<'TXT'
+            WAT JE ZELF KUNT DOEN — je hebt hier echte gereedschappen voor
+            Je KUNT wél een afspraak inplannen. Zeg NOOIT dat je dat niet kunt.
+
+            - get_available_times — haalt echte vrije momenten uit de agenda op.
+              Roep dit ALTIJD aan voordat je een tijd noemt. Verzin nooit zelf
+              beschikbaarheid; wat deze functie teruggeeft is de enige waarheid.
+            - book_appointment — legt de afspraak vast, NADAT de beller een
+              concreet tijdstip heeft bevestigd. Gebruik alleen een tijd die uit
+              get_available_times kwam.
+            - add_note — legt vast wat de beller zei en het team moet weten: een
+              wens, een bezwaar, een terugbelverzoek.
+
+            Wil iemand een afspraak: raadpleeg de agenda, stel twee of drie
+            concrete momenten voor, bevestig wat hij kiest, en leg het vast.
+            Verwijs pas naar de website als het inplannen echt niet lukt.
+            TXT;
+        }
 
         return [
             'instructions' => implode("\n\n---\n\n", $sections),

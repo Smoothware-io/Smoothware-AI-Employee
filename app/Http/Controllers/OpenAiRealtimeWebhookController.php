@@ -72,6 +72,9 @@ class OpenAiRealtimeWebhookController extends Controller
             company: $company,
             objective: $call?->objective ?? null,
             direction: $call?->direction ?? CallDirection::Inbound,
+            // The instructions must AGREE with the tools we declare below. Told it
+            // can book while no gateway can execute that would be the worse lie.
+            withTools: $this->gateway->configured(),
         );
 
         $accepted = Http::withToken((string) config('outbound.openai.key'))
