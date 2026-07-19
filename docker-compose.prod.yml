@@ -62,7 +62,24 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_PROJECT_ID: ${OPENAI_PROJECT_ID:-}
       OPENAI_WEBHOOK_SECRET: ${OPENAI_WEBHOOK_SECRET:-}
-      OPENAI_REALTIME_VOICE: ${OPENAI_REALTIME_VOICE:-alloy}
+      # 'marin' and 'cedar' are the two OpenAI recommends for Realtime.
+      OPENAI_REALTIME_VOICE: ${OPENAI_REALTIME_VOICE:-marin}
+
+      # --- go-voice: the AI's hands ---
+      #
+      # BOTH must be present or the CRM declares no tools at all and the AI
+      # cannot book anything — it is not refusing, it has no book_appointment to
+      # call. This block is why: every variable reaching the container is
+      # enumerated here, so setting these in Dokploy alone did nothing. If you
+      # add a config option that must be settable in production, it needs a line
+      # in this file too.
+      #
+      # Internal alias on dokploy-network, not the public domain: a tool call
+      # runs while the caller waits in silence.
+      VOICE_GATEWAY_URL: ${VOICE_GATEWAY_URL:-}
+      # Must match go-voice's VOICE_SERVICE_TOKEN exactly. A mismatch 401s every
+      # tool call, which looks identical to "the AI cannot book" from outside.
+      VOICE_SERVICE_TOKEN: ${VOICE_SERVICE_TOKEN:-}
 
       # --- Outbound. Every one of these fails closed. ---
       # OUTBOUND_ENABLED stays false until counsel has answered the ZZP'er
