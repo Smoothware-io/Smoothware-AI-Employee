@@ -7,6 +7,7 @@ use App\Models\Call;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
+use Filament\Actions\ViewAction;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
@@ -45,6 +46,15 @@ class CallsTable
                     ->alignCenter()
                     ->icon(fn (Call $record): ?string => $record->hasRecording() ? 'heroicon-m-microphone' : null)
                     ->tooltip(fn (Call $record): ?string => $record->hasRecording() ? 'Has recording' : null),
+                IconColumn::make('transcript')
+                    ->label('Transcript')
+                    ->alignCenter()
+                    // Whether the conversation was captured is the first thing a
+                    // reviewer scans for, and until now the only way to find out
+                    // was to open the edit form.
+                    ->icon(fn (Call $record): ?string => filled($record->transcript) ? 'heroicon-m-chat-bubble-left-right' : null)
+                    ->color('info')
+                    ->tooltip(fn (Call $record): ?string => filled($record->transcript) ? 'Conversation captured' : null),
                 IconColumn::make('content_erased_at')
                     ->label('Erased')
                     ->alignCenter()
@@ -58,6 +68,7 @@ class CallsTable
                 TrashedFilter::make(),
             ])
             ->recordActions([
+                ViewAction::make(),
                 EditAction::make(),
             ])
             ->toolbarActions([

@@ -121,7 +121,10 @@ return [
         'project_id' => env('OPENAI_PROJECT_ID'),
         'key' => env('OPENAI_API_KEY'),
         'model' => env('OPENAI_REALTIME_MODEL', 'gpt-realtime'),
-        'voice' => env('OPENAI_REALTIME_VOICE', 'alloy'),
+        // 'marin' and 'cedar' are the two OpenAI recommends for Realtime; the
+        // older set ('alloy' and friends) reads flatter, which on a cold call is
+        // the difference between a person listening and a person hanging up.
+        'voice' => env('OPENAI_REALTIME_VOICE', 'marin'),
         'sip_host' => env('OPENAI_SIP_HOST', 'sip.api.openai.com'),
         // OpenAI signs every webhook; we verify it. An unsigned "incoming call"
         // is someone else spending your money.
