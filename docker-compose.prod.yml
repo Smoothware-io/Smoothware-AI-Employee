@@ -81,6 +81,14 @@ services:
       # tool call, which looks identical to "the AI cannot book" from outside.
       VOICE_SERVICE_TOKEN: ${VOICE_SERVICE_TOKEN:-}
 
+      # --- Google Calendar: so the AI never books over a real meeting ---
+      # Absent = the feature is simply off and availability falls back to the
+      # working hours configured in the app. Remember this block is the ONLY way
+      # a variable reaches the container; setting it in Dokploy alone does nothing.
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-}
+
       # --- Outbound. Every one of these fails closed. ---
       # OUTBOUND_ENABLED stays false until counsel has answered the ZZP'er
       # question (GO-LIVE-LEGAL.md #3). Deploying is not the same as enabling.
@@ -195,6 +203,13 @@ services:
       OPENAI_WEBHOOK_SECRET: ${OPENAI_WEBHOOK_SECRET:-}
       OUTBOUND_ENABLED: ${OUTBOUND_ENABLED:-false}
       OUTBOUND_ORIGINATOR: ${OUTBOUND_ORIGINATOR:-fake}
+      # PushAppointmentToGoogle runs HERE, not in the web container. Without
+      # these the job succeeds and writes nothing, which is the worst kind of
+      # failure: silent.
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-}
+      VOICE_SERVICE_TOKEN: ${VOICE_SERVICE_TOKEN:-}
 
     # --max-time recycles the worker hourly, which caps the damage from any slow
     # memory leak in a long-lived PHP process.

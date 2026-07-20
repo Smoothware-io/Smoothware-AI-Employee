@@ -5,6 +5,8 @@ namespace App\Models;
 use App\Concerns\HasProvenance;
 use App\Concerns\LogsEvents;
 use App\Enums\AppointmentStatus;
+use App\Observers\AppointmentObserver;
+use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -19,6 +21,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon $starts_at
  * @property Carbon|null $ends_at
  */
+#[ObservedBy(AppointmentObserver::class)]
 class Appointment extends Model
 {
     use HasFactory, HasProvenance, LogsEvents, SoftDeletes;

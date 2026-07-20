@@ -4,14 +4,21 @@ namespace App\Filament\Resources\CallPersonas;
 
 use App\Enums\CallDirection;
 use App\Enums\NavGroup;
+use App\Enums\PersonaPreset;
 use App\Filament\Resources\CallPersonas\Pages\EditCallPersona;
 use App\Filament\Resources\CallPersonas\Pages\ListCallPersonas;
 use App\Models\CallPersona;
+use App\Services\Voice\PersonaWriter;
 use BackedEnum;
+use Filament\Actions\Action;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
+use Filament\Forms\Get;
+use Filament\Forms\Set;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
+use Filament\Schemas\Components\Actions as SchemaActions;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Text;
 use Filament\Schemas\Schema;
@@ -69,6 +76,59 @@ class CallPersonaResource extends Resource
                         // a genuine question about which one the AI is using.
                         ->unique(ignoreRecord: true)
                         ->helperText('Inbound = they call us. Outbound = we call them.'),
+
+                    Select::make('preset')
+                        ->label('What kind of call is this?')
+                        ->options(PersonaPreset::class)
+                        // Not persisted: this is a BRIEF for the writer, not a
+                        // setting. Once the text exists the preset that produced
+                        // it stops mattering, and storing it would invite someone
+                        // to edit the text and leave a preset that no longer
+                        // describes it.
+                        ->dehydrated(false)
+                        ->helperText('Pick one, then press Draft. You can edit everything afterwards.'),
+
+                    SchemaActions::make([
+                        Action::make('draft')
+                            ->label('Draft with AI')
+                            ->icon('heroicon-o-sparkles')
+                            ->color('primary')
+                            ->visible(fn (): bool => app(PersonaWriter::class)->configured())
+                            ->action(function (Get $get, Set $set): void {
+                                $preset = PersonaPreset::tryFrom((string) $get('preset'));
+                                $direction = CallDirection::tryFrom((string) $get('direction'));
+
+                                if ($preset === null || $direction === null) {
+                                    Notification::make()
+                                        ->title('Pick a direction and a call type first')
+                                        ->warning()->send();
+
+                                    return;
+                                }
+
+                                try {
+                                    $draft = app(PersonaWriter::class)->draft($preset, $direction);
+                                } catch (\Throwable $e) {
+                                    Notification::make()
+                                        ->title('Could not draft instructions')
+                                        ->body($e->getMessage())
+                                        ->danger()->persistent()->send();
+
+                                    return;
+                                }
+
+                                // Filled into the FORM, not saved. A human reads it
+                                // and presses save; nothing generated here reaches a
+                                // caller unread (§14).
+                                $set('role', $draft['role']);
+                                $set('goal', $draft['goal']);
+
+                                Notification::make()
+                                    ->title('Draft ready — read it before saving')
+                                    ->body('Written from your knowledge base. Check it says what you want, then save.')
+                                    ->success()->send();
+                            }),
+                    ])->columnSpanFull(),
 
                     Textarea::make('role')
                         ->required()
