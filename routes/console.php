@@ -17,3 +17,9 @@ Schedule::job(new PurgeExpiredCallContent)->dailyAt('03:00');
 // early so the tasks are waiting when reps start the day. withoutOverlapping is
 // belt-and-braces — the evaluator's dedup key already makes a double-run a no-op.
 Schedule::job(new EvaluateTimeBasedFollowUps)->dailyAt('06:00')->withoutOverlapping();
+
+// A call whose ending never got reported (crashed gateway, dropped socket) would
+// otherwise sit at "In progress" forever, uncountable by every report. Every ten
+// minutes is frequent enough that nobody stares at a stuck row for long, and rare
+// enough to be free.
+Schedule::command('calls:close-stale')->everyTenMinutes()->withoutOverlapping();

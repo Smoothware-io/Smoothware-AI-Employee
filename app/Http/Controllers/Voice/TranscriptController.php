@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Voice;
 
 use App\Http\Controllers\Controller;
 use App\Models\Call;
+use App\Services\Voice\CallFinalizer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -15,6 +16,8 @@ use Illuminate\Http\Request;
  */
 class TranscriptController extends Controller
 {
+    public function __construct(private CallFinalizer $finalizer) {}
+
     public function __invoke(Request $request): JsonResponse
     {
         $data = $request->validate([
@@ -39,6 +42,11 @@ class TranscriptController extends Controller
             'retention_expires_at' => $call->retention_expires_at
                 ?? now()->addDays((int) config('receptionist.calls.retention_days', 90)),
         ])->saveQuietly();
+
+        // A transcript arrives on hang-up, so this IS the end of the call. Without
+        // it every call stayed "In progress" forever and duration_seconds stayed
+        // null, quietly emptying every metric built on either.
+        $this->finalizer->close($call);
 
         return response()->json(['stored' => true]);
     }
