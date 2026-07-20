@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\GoogleCalendarOAuthController;
 use App\Http\Controllers\InboundCallWebhookController;
 use App\Http\Controllers\OpenAiRealtimeWebhookController;
 use App\Http\Controllers\Voice\ToolController;
@@ -27,4 +28,14 @@ Route::post('/webhooks/openai/realtime', OpenAiRealtimeWebhookController::class)
 Route::middleware('voice.token')->prefix('api/voice')->group(function () {
     Route::post('/tool', ToolController::class)->name('voice.tool');
     Route::post('/transcript', TranscriptController::class)->name('voice.transcript');
+});
+
+// Google Calendar OAuth (Phase 6). Behind auth: connecting a calendar is a
+// personal act by a signed-in rep, and an unauthenticated callback would let a
+// stranger attach their own calendar to somebody else's profile.
+Route::middleware(['web', 'auth'])->group(function () {
+    Route::get('/google/calendar/redirect', [GoogleCalendarOAuthController::class, 'redirect'])
+        ->name('google.calendar.redirect');
+    Route::get('/google/calendar/callback', [GoogleCalendarOAuthController::class, 'callback'])
+        ->name('google.calendar.callback');
 });

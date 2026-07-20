@@ -6,17 +6,19 @@ use App\Enums\AppointmentStatus;
 use App\Models\Appointment;
 use App\Models\AvailabilityBlock;
 use App\Models\AvailabilityRule;
+use App\Services\Google\GoogleBusyProvider;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
 /**
  * The free slots the AI may offer a caller.
  *
- * Four things narrow the answer, in order:
+ * Five things narrow the answer, in order:
  *   1. the recurring weekly rules  — when we work at all
  *   2. one-off blocks             — holidays, days off, "at a conference"
- *   3. existing appointments      — nobody gets double-booked
- *   4. the present                — a slot in the past is not a slot
+ *   3. connected Google calendars — the meetings that live outside this system
+ *   4. existing appointments      — nobody gets double-booked
+ *   5. the present                — a slot in the past is not a slot
  *
  * Runs SYNCHRONOUSLY while a caller is holding the line, so it is deliberately
  * two queries and some arithmetic rather than anything clever. The window is
@@ -30,6 +32,8 @@ use Illuminate\Support\Collection;
  */
 class AvailabilityCalculator
 {
+    public function __construct(private GoogleBusyProvider $googleBusy) {}
+
     /**
      * @return array<int, Carbon> slot start times, soonest first
      */
@@ -63,6 +67,10 @@ class AvailabilityCalculator
             ->where('starts_at', '<', $until)
             ->get();
 
+        // Meetings that exist only in the rep's own calendar. Fails open if
+        // Google is unreachable — see GoogleBusyProvider for why.
+        $googleBusy = $this->googleBusy->busy($start, $until, $userId);
+
         $taken = Appointment::query()
             ->where('starts_at', '>=', $start->copy()->startOfDay())
             ->where('starts_at', '<=', $until)
@@ -81,6 +89,7 @@ class AvailabilityCalculator
 
                     if ($cursor->gt($start)
                         && ! $this->overlapsAny($cursor, $slotEnd, $blocks)
+                        && ! $this->overlapsAny($cursor, $slotEnd, $googleBusy)
                         && ! $this->overlapsAny($cursor, $slotEnd, $taken)) {
                         $slots[] = $cursor->copy();
 
@@ -125,6 +134,10 @@ class AvailabilityCalculator
             ->where('ends_at', '>', $start)
             ->where('starts_at', '<', $end)
             ->get();
+
+        if ($this->overlapsAny($start, $end, $this->googleBusy->busy($start, $end, $userId))) {
+            return false;
+        }
 
         if ($this->overlapsAny($start, $end, $blocks)) {
             return false;

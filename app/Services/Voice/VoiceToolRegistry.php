@@ -5,6 +5,7 @@ namespace App\Services\Voice;
 use App\Enums\AppointmentStatus;
 use App\Enums\NoteCategory;
 use App\Enums\RecordSource;
+use App\Jobs\PushAppointmentToGoogle;
 use App\Models\Appointment;
 use App\Models\Call;
 use App\Models\Company;
@@ -184,6 +185,11 @@ class VoiceToolRegistry
             // it renders as AI and a human can review or undo it.
             'source' => RecordSource::Ai,
         ]);
+
+        // Queued, not inline: the caller is still on the phone and a slow Google
+        // would be dead air they hear. The meeting is already safe in the CRM, so
+        // a delay costs nothing and a failure costs only the convenience copy.
+        PushAppointmentToGoogle::dispatch($appointment->getKey());
 
         return [
             'booked' => true,

@@ -51,6 +51,26 @@ return [
     ],
 
     /*
+    | Google Calendar — so the AI never books over a rep's real meetings.
+    |
+    | Per user, not per install: the calendar being protected is personal, and a
+    | single shared service account would make every rep's private appointments
+    | readable by everyone in the CRM.
+    |
+    | Absent credentials = the feature is simply off. Nothing breaks; availability
+    | falls back to the CRM's own working hours and appointments.
+    */
+    'google' => [
+        'client_id' => env('GOOGLE_CLIENT_ID'),
+        'client_secret' => env('GOOGLE_CLIENT_SECRET'),
+        'redirect' => env('GOOGLE_REDIRECT_URI'),
+        // Short by design: freeBusy runs while a caller waits in silence.
+        'timeout' => (int) env('GOOGLE_TIMEOUT', 5),
+        // Long enough that a chatty call does not hammer Google, short enough
+        // that a meeting added five minutes ago still blocks.
+        'busy_cache_seconds' => (int) env('GOOGLE_BUSY_CACHE_SECONDS', 60),
+    ],
+    /*
     | Anthropic Claude — reasoning/analysis for the AI receptionist (Phase 3+).
     | Generation only (embeddings live under 'embeddings' above).
     */
