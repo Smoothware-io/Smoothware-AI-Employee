@@ -59,17 +59,32 @@ return [
     'allow_without_register_screening' => (bool) env('OUTBOUND_ALLOW_WITHOUT_REGISTER_SCREENING', false),
 
     /*
-    | Numbers the dialler may call regardless of the gates — your own mobile, a
-    | colleague's, a friend who agreed to be a test subject. This is how you prove
-    | the pipe without touching a prospect.
+    | Numbers the dialler may call — your own mobile, a colleague's, a friend who
+    | agreed to be a test subject. This is how you prove the pipe without
+    | touching a prospect.
     |
-    | When set, the dialler will call ONLY these numbers and refuse everything
-    | else. That is the safest possible way to test a system that makes phone
-    | calls: it cannot reach a stranger by mistake.
+    | The dialler will call ONLY these numbers and refuse everything else.
+    |
+    | EMPTY MEANS NOBODY, not everybody. Every other gate in OutboundGate treats
+    | a missing answer as "no"; this one does too. Reaching real prospects needs
+    | the separate, explicit switch below.
     */
     'test_numbers' => array_values(array_filter(
         explode(',', (string) env('OUTBOUND_TEST_NUMBERS', '')),
     )),
+
+    /*
+    | Let the dialler ring numbers that are NOT on the test list — real prospects.
+    |
+    | Deliberately separate from OUTBOUND_ENABLED. "The dialler works" and "the
+    | dialler may ring strangers" are different decisions, made at different
+    | times and possibly by different people. Switching the machine on should
+    | never be the same act as pointing it at the public.
+    |
+    | Only meaningful when OUTBOUND_TEST_NUMBERS is empty — a test list always
+    | wins, so the dialler cannot be half-opened by accident.
+    */
+    'allow_any_number' => (bool) env('OUTBOUND_ALLOW_ANY_NUMBER', false),
 
     // Belt and braces against a runaway loop dialling the same list all day.
     'max_calls_per_day' => (int) env('OUTBOUND_MAX_CALLS_PER_DAY', 50),

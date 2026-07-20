@@ -51,8 +51,12 @@ class OutboundGate
         }
 
         if (! $this->isAllowedNumber($phone)) {
-            $blockers[] = 'OUTBOUND_TEST_NUMBERS is set, so only those numbers may be dialled. '
-                .'This is the safe way to test: the dialler cannot reach a stranger by mistake.';
+            $blockers[] = (array) config('outbound.test_numbers', []) === []
+                ? 'No numbers are allowed to be dialled. Set OUTBOUND_TEST_NUMBERS to the '
+                    .'number(s) you are testing with, or OUTBOUND_ALLOW_ANY_NUMBER=true to '
+                    .'dial real prospects.'
+                : 'OUTBOUND_TEST_NUMBERS is set, so only those numbers may be dialled. '
+                    .'This is the safe way to test: the dialler cannot reach a stranger by mistake.';
         }
 
         if ($this->callsToday() >= (int) config('outbound.max_calls_per_day', 50)) {
@@ -76,15 +80,26 @@ class OutboundGate
     }
 
     /**
-     * When OUTBOUND_TEST_NUMBERS is set the dialler becomes an allow-list: only
-     * those numbers, nothing else. Empty means the list is not in use.
+     * Which numbers may be dialled at all.
+     *
+     * FAILS CLOSED, like every other gate here: an empty test list means NOBODY,
+     * not everybody. Dialling real prospects takes a second, explicit switch.
+     *
+     * This used to read the other way — empty meant "list not in use", so the
+     * one configuration mistake nobody would notice (forgetting the test list
+     * while outbound was on) silently opened the dialler onto the whole
+     * database. Every other gate in this class treats a missing answer as "no";
+     * this one now agrees with them.
      */
     private function isAllowedNumber(string $phone): bool
     {
         $allowed = (array) config('outbound.test_numbers', []);
 
         if ($allowed === []) {
-            return true;
+            // Deliberately separate from OUTBOUND_ENABLED. "The dialler works"
+            // and "the dialler may ring strangers" are different decisions, and
+            // one person may reasonably make the first without the second.
+            return (bool) config('outbound.allow_any_number', false);
         }
 
         $normalize = fn (string $n): ?string => $this->suppressions->normalize(SuppressionType::Phone, $n);

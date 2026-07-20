@@ -42,6 +42,9 @@ function configureOpenAi(): void
         'outbound.disclosure' => 'Je spreekt met een AI-assistent.',
         'outbound.allow_without_register_screening' => true,
         'outbound.test_numbers' => [],
+        // The allow-list fails closed, so a suite about OTHER gates has to say
+        // out loud that dialling itself is permitted.
+        'outbound.allow_any_number' => true,
         'outbound.openai.project_id' => 'proj_test',
         'outbound.openai.key' => 'sk-test',
         'outbound.openai.sip_host' => 'sip.api.openai.com',

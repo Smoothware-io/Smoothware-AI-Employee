@@ -29,6 +29,9 @@ function configureOutbound(array $overrides = []): void
         'outbound.register_screening' => 'none',
         'outbound.allow_without_register_screening' => true,
         'outbound.test_numbers' => [],
+        // The allow-list fails closed, so a suite about OTHER gates has to say
+        // out loud that dialling itself is permitted.
+        'outbound.allow_any_number' => true,
         'outbound.max_calls_per_day' => 50,
         'outbound.openai.project_id' => 'proj_test',
         'outbound.openai.key' => 'sk-test',

@@ -94,7 +94,12 @@ services:
       # question (GO-LIVE-LEGAL.md #3). Deploying is not the same as enabling.
       OUTBOUND_ENABLED: ${OUTBOUND_ENABLED:-false}
       OUTBOUND_ORIGINATOR: ${OUTBOUND_ORIGINATOR:-fake}
+      # Empty = the dialler rings NOBODY. That is the intended default.
       OUTBOUND_TEST_NUMBERS: ${OUTBOUND_TEST_NUMBERS:-}
+      # The switch that points the dialler at real prospects. Separate from
+      # OUTBOUND_ENABLED on purpose: turning the machine on and aiming it at the
+      # public are different decisions.
+      OUTBOUND_ALLOW_ANY_NUMBER: ${OUTBOUND_ALLOW_ANY_NUMBER:-false}
       OUTBOUND_REGISTER_SCREENING: ${OUTBOUND_REGISTER_SCREENING:-none}
       # Deliberately ugly to type, deliberately logged. Setting this is a human
       # stating they have taken responsibility for opt-out screening by other
