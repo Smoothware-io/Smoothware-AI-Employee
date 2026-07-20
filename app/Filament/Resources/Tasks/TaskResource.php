@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Tasks;
 
+use App\Enums\NavGroup;
 use App\Filament\Resources\Tasks\Pages\CreateTask;
 use App\Filament\Resources\Tasks\Pages\EditTask;
 use App\Filament\Resources\Tasks\Pages\ListTasks;
@@ -15,10 +16,15 @@ use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
+use UnitEnum;
 
 class TaskResource extends Resource
 {
     protected static ?string $model = Task::class;
+
+    protected static string|UnitEnum|null $navigationGroup = NavGroup::Work;
+
+    protected static ?int $navigationSort = 5;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
 

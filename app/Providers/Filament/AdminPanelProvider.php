@@ -2,11 +2,13 @@
 
 namespace App\Providers\Filament;
 
+use App\Enums\NavGroup;
 use BezhanSalleh\FilamentShield\FilamentShieldPlugin;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
+use Filament\Navigation\NavigationGroup;
 use Filament\Pages\Dashboard;
 use Filament\Panel;
 use Filament\PanelProvider;
@@ -37,6 +39,17 @@ class AdminPanelProvider extends PanelProvider
             ->pages([
                 Dashboard::class,
             ])
+            // Explicit order. Without this Filament sorts groups by the order it
+            // happens to discover resources in, which puts "Settings" above the
+            // work a rep does every morning.
+            ->navigationGroups(
+                collect(NavGroup::cases())
+                    ->sortBy(fn (NavGroup $g): int => $g->order())
+                    // No ->icon(): Filament throws when a group AND its items both
+                    // carry icons, and the per-resource icons are the useful ones.
+                    ->map(fn (NavGroup $g) => NavigationGroup::make($g->getLabel()))
+                    ->all()
+            )
             ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\Filament\Widgets')
             ->widgets([
                 AccountWidget::class,

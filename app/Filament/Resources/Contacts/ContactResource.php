@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Contacts;
 
+use App\Enums\NavGroup;
 use App\Filament\Resources\Contacts\Pages\CreateContact;
 use App\Filament\Resources\Contacts\Pages\EditContact;
 use App\Filament\Resources\Contacts\Pages\ListContacts;
@@ -15,10 +16,15 @@ use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
+use UnitEnum;
 
 class ContactResource extends Resource
 {
     protected static ?string $model = Contact::class;
+
+    protected static string|UnitEnum|null $navigationGroup = NavGroup::Work;
+
+    protected static ?int $navigationSort = 2;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
 

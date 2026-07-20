@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Campaigns;
 
+use App\Enums\NavGroup;
 use App\Filament\Resources\Campaigns\Pages\CreateCampaign;
 use App\Filament\Resources\Campaigns\Pages\EditCampaign;
 use App\Filament\Resources\Campaigns\Pages\ListCampaigns;
@@ -19,13 +20,13 @@ class CampaignResource extends Resource
 {
     protected static ?string $model = Campaign::class;
 
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedMegaphone;
-
-    protected static string|UnitEnum|null $navigationGroup = 'Import';
-
-    protected static ?string $recordTitleAttribute = 'name';
+    protected static string|UnitEnum|null $navigationGroup = NavGroup::Leads;
 
     protected static ?int $navigationSort = 2;
+
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedMegaphone;
+
+    protected static ?string $recordTitleAttribute = 'name';
 
     public static function form(Schema $schema): Schema
     {

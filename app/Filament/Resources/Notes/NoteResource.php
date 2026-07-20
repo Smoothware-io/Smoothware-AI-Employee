@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Notes;
 
+use App\Enums\NavGroup;
 use App\Filament\Resources\Notes\Pages\CreateNote;
 use App\Filament\Resources\Notes\Pages\EditNote;
 use App\Filament\Resources\Notes\Pages\ListNotes;
@@ -15,10 +16,15 @@ use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
+use UnitEnum;
 
 class NoteResource extends Resource
 {
     protected static ?string $model = Note::class;
+
+    protected static string|UnitEnum|null $navigationGroup = NavGroup::Work;
+
+    protected static ?int $navigationSort = 6;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
 

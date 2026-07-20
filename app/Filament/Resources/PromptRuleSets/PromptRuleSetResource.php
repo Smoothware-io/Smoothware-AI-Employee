@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\PromptRuleSets;
 
+use App\Enums\NavGroup;
 use App\Filament\Resources\PromptRuleSets\Pages\CreatePromptRuleSet;
 use App\Filament\Resources\PromptRuleSets\Pages\EditPromptRuleSet;
 use App\Filament\Resources\PromptRuleSets\Pages\ListPromptRuleSets;
@@ -22,13 +23,13 @@ class PromptRuleSetResource extends Resource
 {
     protected static ?string $model = PromptRuleSet::class;
 
+    protected static string|UnitEnum|null $navigationGroup = NavGroup::TeachTheAi;
+
+    protected static ?int $navigationSort = 3;
+
+    protected static ?string $navigationLabel = 'Rules for the AI';
+
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedShieldCheck;
-
-    protected static string|UnitEnum|null $navigationGroup = 'Knowledge Base';
-
-    protected static ?string $navigationLabel = 'Prompt rules';
-
-    protected static ?int $navigationSort = 2;
 
     protected static ?string $recordTitleAttribute = 'version';
 

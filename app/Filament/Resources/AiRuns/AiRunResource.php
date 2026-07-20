@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\AiRuns;
 
+use App\Enums\NavGroup;
 use App\Filament\Resources\AiRuns\Pages\ListAiRuns;
 use App\Filament\Resources\AiRuns\Pages\ViewAiRun;
 use App\Filament\Resources\AiRuns\Schemas\AiRunInfolist;
@@ -22,13 +23,13 @@ class AiRunResource extends Resource
 {
     protected static ?string $model = AiRun::class;
 
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedCpuChip;
-
-    protected static string|UnitEnum|null $navigationGroup = 'AI Receptionist';
-
-    protected static ?string $navigationLabel = 'AI runs';
+    protected static string|UnitEnum|null $navigationGroup = NavGroup::AiActivity;
 
     protected static ?int $navigationSort = 2;
+
+    protected static ?string $navigationLabel = 'AI activity log';
+
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedCpuChip;
 
     public static function infolist(Schema $schema): Schema
     {

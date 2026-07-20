@@ -2,6 +2,7 @@
 
 namespace App\Filament\Pages;
 
+use App\Enums\NavGroup;
 use App\Models\SonetelAccount;
 use App\Services\Outbound\SonetelTokenService;
 use BackedEnum;
@@ -31,13 +32,13 @@ class ConnectSonetel extends Page
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedPhoneArrowUpRight;
 
-    protected static string|UnitEnum|null $navigationGroup = 'Automation';
+    protected static string|UnitEnum|null $navigationGroup = NavGroup::Settings;
 
-    protected static ?string $navigationLabel = 'My Sonetel';
+    protected static ?string $navigationLabel = 'My phone account';
 
     protected static ?string $title = 'Sonetel connection';
 
-    protected static ?int $navigationSort = 9;
+    protected static ?int $navigationSort = 2;
 
     public function getAccount(): ?SonetelAccount
     {

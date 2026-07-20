@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\CallPersonas;
 
 use App\Enums\CallDirection;
+use App\Enums\NavGroup;
 use App\Filament\Resources\CallPersonas\Pages\EditCallPersona;
 use App\Filament\Resources\CallPersonas\Pages\ListCallPersonas;
 use App\Models\CallPersona;
@@ -19,6 +20,7 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Model;
+use UnitEnum;
 
 /**
  * Lets a human edit WHO the AI is on a call, without a deploy.
@@ -34,9 +36,13 @@ class CallPersonaResource extends Resource
 {
     protected static ?string $model = CallPersona::class;
 
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedIdentification;
+    protected static string|UnitEnum|null $navigationGroup = NavGroup::TeachTheAi;
 
-    protected static ?string $navigationLabel = 'AI call personas';
+    protected static ?int $navigationSort = 2;
+
+    protected static ?string $navigationLabel = 'What the AI is';
+
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedIdentification;
 
     protected static ?string $recordTitleAttribute = 'direction';
 

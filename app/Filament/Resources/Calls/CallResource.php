@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Calls;
 
+use App\Enums\NavGroup;
 use App\Filament\Resources\Calls\Pages\CreateCall;
 use App\Filament\Resources\Calls\Pages\EditCall;
 use App\Filament\Resources\Calls\Pages\ListCalls;
@@ -17,10 +18,15 @@ use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
+use UnitEnum;
 
 class CallResource extends Resource
 {
     protected static ?string $model = Call::class;
+
+    protected static string|UnitEnum|null $navigationGroup = NavGroup::Work;
+
+    protected static ?int $navigationSort = 3;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
 

@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Appointments;
 
+use App\Enums\NavGroup;
 use App\Filament\Resources\Appointments\Pages\CreateAppointment;
 use App\Filament\Resources\Appointments\Pages\EditAppointment;
 use App\Filament\Resources\Appointments\Pages\ListAppointments;
@@ -15,10 +16,15 @@ use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
+use UnitEnum;
 
 class AppointmentResource extends Resource
 {
     protected static ?string $model = Appointment::class;
+
+    protected static string|UnitEnum|null $navigationGroup = NavGroup::Work;
+
+    protected static ?int $navigationSort = 4;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
 

@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Suppressions;
 
+use App\Enums\NavGroup;
 use App\Filament\Resources\Suppressions\Pages\CreateSuppression;
 use App\Filament\Resources\Suppressions\Pages\ListSuppressions;
 use App\Filament\Resources\Suppressions\Schemas\SuppressionForm;
@@ -25,13 +26,13 @@ class SuppressionResource extends Resource
 {
     protected static ?string $model = Suppression::class;
 
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedNoSymbol;
+    protected static string|UnitEnum|null $navigationGroup = NavGroup::Leads;
 
-    protected static string|UnitEnum|null $navigationGroup = 'CRM';
+    protected static ?int $navigationSort = 3;
 
     protected static ?string $navigationLabel = 'Do not contact';
 
-    protected static ?int $navigationSort = 9;
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedNoSymbol;
 
     protected static ?string $recordTitleAttribute = 'value_raw';
 

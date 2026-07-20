@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Imports;
 
+use App\Enums\NavGroup;
 use App\Filament\Resources\Imports\Pages\CreateImport;
 use App\Filament\Resources\Imports\Pages\ListImports;
 use App\Filament\Resources\Imports\Pages\ViewImport;
@@ -21,13 +22,15 @@ class ImportResource extends Resource
 {
     protected static ?string $model = Import::class;
 
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedArrowUpTray;
-
-    protected static string|UnitEnum|null $navigationGroup = 'Import';
-
-    protected static ?string $recordTitleAttribute = 'original_name';
+    protected static string|UnitEnum|null $navigationGroup = NavGroup::Leads;
 
     protected static ?int $navigationSort = 1;
+
+    protected static ?string $navigationLabel = 'Import leads';
+
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedArrowUpTray;
+
+    protected static ?string $recordTitleAttribute = 'original_name';
 
     public static function form(Schema $schema): Schema
     {

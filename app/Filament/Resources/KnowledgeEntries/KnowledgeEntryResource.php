@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\KnowledgeEntries;
 
+use App\Enums\NavGroup;
 use App\Filament\Resources\KnowledgeEntries\Pages\CreateKnowledgeEntry;
 use App\Filament\Resources\KnowledgeEntries\Pages\EditKnowledgeEntry;
 use App\Filament\Resources\KnowledgeEntries\Pages\ListKnowledgeEntries;
@@ -23,13 +24,13 @@ class KnowledgeEntryResource extends Resource
 {
     protected static ?string $model = KnowledgeEntry::class;
 
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedBookOpen;
+    protected static string|UnitEnum|null $navigationGroup = NavGroup::TeachTheAi;
 
-    protected static string|UnitEnum|null $navigationGroup = 'Knowledge Base';
+    protected static ?int $navigationSort = 1;
 
     protected static ?string $navigationLabel = 'Knowledge base';
 
-    protected static ?int $navigationSort = 1;
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedBookOpen;
 
     protected static ?string $recordTitleAttribute = 'title';
 

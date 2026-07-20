@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\AiActions;
 
+use App\Enums\NavGroup;
 use App\Filament\Resources\AiActions\Pages\ListAiActions;
 use App\Filament\Resources\AiActions\Pages\ViewAiAction;
 use App\Filament\Resources\AiActions\Schemas\AiActionInfolist;
@@ -23,13 +24,13 @@ class AiActionResource extends Resource
 {
     protected static ?string $model = AiAction::class;
 
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedInboxStack;
-
-    protected static string|UnitEnum|null $navigationGroup = 'AI Receptionist';
-
-    protected static ?string $navigationLabel = 'Review queue';
+    protected static string|UnitEnum|null $navigationGroup = NavGroup::AiActivity;
 
     protected static ?int $navigationSort = 1;
+
+    protected static ?string $navigationLabel = 'Needs your review';
+
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedInboxStack;
 
     public static function getNavigationBadge(): ?string
     {

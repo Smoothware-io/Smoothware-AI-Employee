@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\FollowUpRules;
 
+use App\Enums\NavGroup;
 use App\Filament\Resources\FollowUpRules\Pages\CreateFollowUpRule;
 use App\Filament\Resources\FollowUpRules\Pages\EditFollowUpRule;
 use App\Filament\Resources\FollowUpRules\Pages\ListFollowUpRules;
@@ -19,15 +20,15 @@ class FollowUpRuleResource extends Resource
 {
     protected static ?string $model = FollowUpRule::class;
 
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedBolt;
-
-    protected static string|UnitEnum|null $navigationGroup = 'Automation';
-
-    protected static ?string $recordTitleAttribute = 'name';
-
-    protected static ?string $navigationLabel = 'Rules';
+    protected static string|UnitEnum|null $navigationGroup = NavGroup::Settings;
 
     protected static ?int $navigationSort = 1;
+
+    protected static ?string $navigationLabel = 'Follow-up rules';
+
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedBolt;
+
+    protected static ?string $recordTitleAttribute = 'name';
 
     public static function form(Schema $schema): Schema
     {
