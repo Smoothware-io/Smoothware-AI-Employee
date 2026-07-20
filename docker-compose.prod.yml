@@ -96,8 +96,17 @@ services:
       OUTBOUND_ORIGINATOR: ${OUTBOUND_ORIGINATOR:-fake}
       OUTBOUND_TEST_NUMBERS: ${OUTBOUND_TEST_NUMBERS:-}
       OUTBOUND_REGISTER_SCREENING: ${OUTBOUND_REGISTER_SCREENING:-none}
+      # Deliberately ugly to type, deliberately logged. Setting this is a human
+      # stating they have taken responsibility for opt-out screening by other
+      # means. Without a line HERE the gate keeps blocking however you set it in
+      # Dokploy — which reads as "the code is broken" rather than "it is unset".
+      OUTBOUND_ALLOW_WITHOUT_REGISTER_SCREENING: ${OUTBOUND_ALLOW_WITHOUT_REGISTER_SCREENING:-false}
+      OUTBOUND_MAX_CALLS_PER_DAY: ${OUTBOUND_MAX_CALLS_PER_DAY:-50}
       ASTERISK_AMI_HOST: ${ASTERISK_AMI_HOST:-127.0.0.1}
       ASTERISK_AMI_SECRET: ${ASTERISK_AMI_SECRET:-}
+      ASTERISK_AMI_PORT: ${ASTERISK_AMI_PORT:-5038}
+      ASTERISK_AMI_USERNAME: ${ASTERISK_AMI_USERNAME:-laravel}
+      ASTERISK_BRIDGE_CONTEXT: ${ASTERISK_BRIDGE_CONTEXT:-bridge-openai}
 
     volumes:
       # Only what must outlive a deploy. The app tree is baked into the image.
