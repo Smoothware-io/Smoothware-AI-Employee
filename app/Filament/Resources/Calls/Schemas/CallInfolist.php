@@ -39,9 +39,14 @@ class CallInfolist
 
                 Section::make('Conversation')
                     ->description('Both sides of the call, as transcribed by the model.')
+                    // Full width. A transcript is the densest thing on this page and
+                    // the only one anyone reads end to end; in a narrow column every
+                    // second sentence wraps and it becomes unreadable.
+                    ->columnSpanFull()
                     ->schema([
                         ViewEntry::make('transcript')
                             ->hiddenLabel()
+                            ->columnSpanFull()
                             ->view('filament.calls.transcript'),
                     ]),
 
