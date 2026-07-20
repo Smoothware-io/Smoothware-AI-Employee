@@ -1,0 +1,112 @@
+<?php
+
+namespace App\Filament\Resources\CallPersonas;
+
+use App\Enums\CallDirection;
+use App\Filament\Resources\CallPersonas\Pages\EditCallPersona;
+use App\Filament\Resources\CallPersonas\Pages\ListCallPersonas;
+use App\Models\CallPersona;
+use BackedEnum;
+use Filament\Actions\EditAction;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
+use Filament\Resources\Resource;
+use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Text;
+use Filament\Schemas\Schema;
+use Filament\Support\Icons\Heroicon;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Table;
+use Illuminate\Contracts\Support\Htmlable;
+use Illuminate\Database\Eloquent\Model;
+
+/**
+ * Lets a human edit WHO the AI is on a call, without a deploy.
+ *
+ * Scope is deliberately narrow. The role and the goal are business decisions and
+ * belong in a form. The Art. 50 disclosure, the hard limits, and the tool
+ * instructions are NOT here and must not be: a live call has no review queue and
+ * no undo, so putting a delete button next to legal compliance and next to the
+ * grounding contract would make one careless edit unrecoverable in a way no
+ * amount of auditing fixes afterwards.
+ */
+class CallPersonaResource extends Resource
+{
+    protected static ?string $model = CallPersona::class;
+
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedIdentification;
+
+    protected static ?string $navigationLabel = 'AI call personas';
+
+    protected static ?string $recordTitleAttribute = 'direction';
+
+    /**
+     * `direction` is an enum cast, so the default implementation hands the page
+     * title a CallDirection where a string is required and the whole page dies
+     * with a TypeError. Return the human label instead.
+     */
+    public static function getRecordTitle(?Model $record): string|Htmlable|null
+    {
+        return $record?->direction->getLabel() ?? static::getModelLabel();
+    }
+
+    public static function form(Schema $schema): Schema
+    {
+        return $schema->components([
+            Section::make('Role')
+                ->description('What the AI is on this kind of call. Written in the language you want it to think in.')
+                ->schema([
+                    Select::make('direction')
+                        ->options(CallDirection::class)
+                        ->required()
+                        // One persona per direction: two "inbound" rows would leave
+                        // a genuine question about which one the AI is using.
+                        ->unique(ignoreRecord: true)
+                        ->helperText('Inbound = they call us. Outbound = we call them.'),
+
+                    Textarea::make('role')
+                        ->required()
+                        ->rows(6)
+                        ->columnSpanFull()
+                        ->helperText('Who the AI is and how it should behave. An AI that answers must not announce a call; an AI that calls must not ask "how can I help you?".'),
+
+                    Textarea::make('goal')
+                        ->rows(4)
+                        ->columnSpanFull()
+                        ->helperText('Optional. What a good call achieves — for example: understand the need and book an intro meeting.'),
+                ]),
+
+            Section::make('What you cannot change here')
+                ->description('These are safety invariants, kept in code on purpose.')
+                ->collapsed()
+                ->schema([
+                    Text::make(
+                        'The AI disclosure (EU AI Act Art. 50), the hard limits (never invent facts, never quote prices, '
+                        .'honour a do-not-call request immediately), and the booking-tool instructions are not editable. '
+                        .'They protect the caller and the company, and a live call cannot be undone.'
+                    ),
+                ]),
+        ]);
+    }
+
+    public static function table(Table $table): Table
+    {
+        return $table
+            ->columns([
+                TextColumn::make('direction')->badge(),
+                TextColumn::make('role')->limit(80)->wrap(),
+                TextColumn::make('goal')->limit(60)->placeholder('—')->toggleable(),
+                TextColumn::make('editor.name')->label('Last edited by')->placeholder('—'),
+                TextColumn::make('updated_at')->dateTime('d M Y, H:i')->sortable(),
+            ])
+            ->recordActions([EditAction::make()]);
+    }
+
+    public static function getPages(): array
+    {
+        return [
+            'index' => ListCallPersonas::route('/'),
+            'edit' => EditCallPersona::route('/{record}/edit'),
+        ];
+    }
+}

@@ -5,6 +5,7 @@ namespace App\Services\Outbound;
 use App\Enums\CallDirection;
 use App\Enums\Language;
 use App\Enums\PreferredChannel;
+use App\Models\CallPersona;
 use App\Models\Company;
 use App\Services\ContextVersion;
 use App\Services\KnowledgeRetriever;
@@ -74,12 +75,17 @@ class CallInstructionBuilder
             .'de ander haast heeft.';
 
         // 2. Who we are, and which way this call goes.
-        $sections[] = $inbound
-            ? "WIE JE BENT\nJe NEEMT DE TELEFOON OP namens Smoothware, een Nederlands web- en "
-                .'softwarebureau. Deze persoon belt ONS — jij belt hen niet. Vraag waarmee je kunt '
-                .'helpen, luister, en beantwoord alleen wat je uit de kennisbank weet.'
-            : "WIE JE BENT\nJe BELT namens Smoothware, een Nederlands web- en softwarebureau. "
-                .'Jij hebt hen gebeld — respecteer hun tijd.';
+        //
+        // Editable by a human (CallPersona). How the AI introduces itself is a
+        // business decision, and it used to need a developer and a deploy. The
+        // model falls back to the previous hardcoded text when no row exists, so
+        // an empty table never produces a roleless AI on a live call.
+        $persona = CallPersona::forDirection($direction);
+        $sections[] = "WIE JE BENT\n".trim($persona->role);
+
+        if (filled($persona->goal)) {
+            $sections[] = "WAT JE WILT BEREIKEN\n".trim($persona->goal);
+        }
 
         if ($company !== null) {
             $sections[] = $this->companyContext($company);
