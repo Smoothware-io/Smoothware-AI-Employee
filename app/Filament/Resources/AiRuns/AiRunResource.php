@@ -41,6 +41,20 @@ class AiRunResource extends Resource
         return AiRunsTable::configure($table);
     }
 
+    /**
+     * Diagnostics, not a feature.
+     *
+     * This lists every model call the system has made — tokens, latency, prompt
+     * versions. Invaluable when something is wrong, meaningless to a salesperson,
+     * and it made the sidebar look like a developer console. Hidden from the
+     * menu for everyone who cannot administer the app; still reachable by URL,
+     * still permission-checked, so debugging loses nothing.
+     */
+    public static function shouldRegisterNavigation(): bool
+    {
+        return auth()->user()?->can('view_any_ai::run') ?? false;
+    }
+
     public static function canCreate(): bool
     {
         return false;

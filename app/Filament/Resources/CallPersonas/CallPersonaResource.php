@@ -14,13 +14,16 @@ use Filament\Actions\Action;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
-use Filament\Forms\Get;
-use Filament\Forms\Set;
+// Schemas\...\Get, NOT Forms\Get: inside a SCHEMA action Filament injects the
+// schema utility, and the wrong type hint throws the moment the button is
+// pressed — which renders fine and fails only on click.
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Actions as SchemaActions;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Text;
+use Filament\Schemas\Components\Utilities\Get;
+use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
@@ -66,7 +69,10 @@ class CallPersonaResource extends Resource
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
-            Section::make('Role')
+            // NOT "Role". Shield's Roles resource means WHO MAY USE THIS APP;
+            // this means WHAT THE AI IS. Same word, unrelated things, one
+            // sidebar — so this one avoids the word entirely.
+            Section::make('How the AI behaves on this call')
                 ->description('What the AI is on this kind of call. Written in the language you want it to think in.')
                 ->schema([
                     Select::make('direction')
@@ -95,8 +101,19 @@ class CallPersonaResource extends Resource
                             ->color('primary')
                             ->visible(fn (): bool => app(PersonaWriter::class)->configured())
                             ->action(function (Get $get, Set $set): void {
-                                $preset = PersonaPreset::tryFrom((string) $get('preset'));
-                                $direction = CallDirection::tryFrom((string) $get('direction'));
+                                // Filament hands back the ENUM when the select is
+                                // enum-backed and a raw string when it is not, so
+                                // accept both. Casting an enum object with (string)
+                                // is a fatal error, and one only a click finds.
+                                $rawPreset = $get('preset');
+                                $preset = $rawPreset instanceof PersonaPreset
+                                    ? $rawPreset
+                                    : PersonaPreset::tryFrom((string) $rawPreset);
+
+                                $rawDirection = $get('direction');
+                                $direction = $rawDirection instanceof CallDirection
+                                    ? $rawDirection
+                                    : CallDirection::tryFrom((string) $rawDirection);
 
                                 if ($preset === null || $direction === null) {
                                     Notification::make()
@@ -131,6 +148,7 @@ class CallPersonaResource extends Resource
                     ])->columnSpanFull(),
 
                     Textarea::make('role')
+                        ->label('Who the AI is')
                         ->required()
                         ->rows(6)
                         ->columnSpanFull()
@@ -160,7 +178,7 @@ class CallPersonaResource extends Resource
         return $table
             ->columns([
                 TextColumn::make('direction')->badge(),
-                TextColumn::make('role')->limit(80)->wrap(),
+                TextColumn::make('role')->label('Who the AI is')->limit(80)->wrap(),
                 TextColumn::make('goal')->limit(60)->placeholder('—')->toggleable(),
                 TextColumn::make('editor.name')->label('Last edited by')->placeholder('—'),
                 TextColumn::make('updated_at')->dateTime('d M Y, H:i')->sortable(),

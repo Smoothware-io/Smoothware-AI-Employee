@@ -67,7 +67,17 @@ class AdminPanelProvider extends PanelProvider
                 DispatchServingFilamentEvent::class,
             ])
             ->plugins([
-                FilamentShieldPlugin::make(),
+                // Shield ships a resource called "Roles" — WHO MAY USE THIS APP.
+                // We also have a call persona, which was labelled "role" — WHAT
+                // THE AI IS. Two unrelated things with the same word, sitting in
+                // the same sidebar, is a guaranteed wrong click. Shield's is the
+                // one that means permissions, so it says so.
+                FilamentShieldPlugin::make()
+                    ->navigationGroup(NavGroup::Settings->getLabel())
+                    ->navigationLabel('Who can use this app')
+                    ->pluralModelLabel('user permissions')
+                    ->modelLabel('permission group')
+                    ->navigationSort(9),
             ])
             ->authMiddleware([
                 Authenticate::class,
