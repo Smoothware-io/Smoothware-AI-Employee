@@ -9,6 +9,7 @@ use App\Models\Appointment;
 use App\Models\Call;
 use App\Models\Company;
 use App\Models\Note;
+use App\Services\Availability\AvailabilityCalculator;
 use Illuminate\Support\Carbon;
 use RuntimeException;
 
@@ -32,6 +33,8 @@ use RuntimeException;
  */
 class VoiceToolRegistry
 {
+    public function __construct(private AvailabilityCalculator $availability) {}
+
     /**
      * The tool schemas as OpenAI's Realtime session expects them. Handed to the
      * model in the accept payload so it knows what it can call.
@@ -119,60 +122,27 @@ class VoiceToolRegistry
     }
 
     /**
-     * Free slots across business hours, minus anything already booked. Small and
-     * synchronous on purpose: the caller is holding the line while this runs.
+     * Free slots, from the configured working hours minus blocks and anything
+     * already booked. Synchronous on purpose: the caller is holding the line.
      *
      * @param  array<string, mixed>  $args
      * @return array<string, mixed>
      */
     private function availableTimes(array $args): array
     {
-        $cfg = (array) config('voice.booking');
-        $open = (int) $cfg['open_hour'];
-        $close = (int) $cfg['close_hour'];
-        $slot = (int) $cfg['slot_minutes'];
-        $horizon = (int) $cfg['horizon_days'];
+        $slot = (int) config('voice.booking.slot_minutes', 30);
 
-        $from = $this->parseDate($args['from_date'] ?? null) ?? Carbon::today();
-        $until = Carbon::today()->addDays($horizon);
+        $slots = $this->availability->freeSlots(
+            from: $this->parseDate($args['from_date'] ?? null),
+            // Null today: company-wide availability. When leads gain an owner,
+            // this becomes that owner's id and nothing else here changes.
+            userId: null,
+        );
 
-        // One query for the whole window rather than per-slot — the taken set is
-        // small and checking in PHP beats N round-trips while a human waits.
-        $taken = Appointment::query()
-            ->whereBetween('starts_at', [$from->copy()->startOfDay(), $until->copy()->endOfDay()])
-            ->whereIn('status', [AppointmentStatus::Scheduled->value])
-            ->pluck('starts_at')
-            ->map(fn (Carbon $t) => $t->format('Y-m-d H:i'))
-            ->flip();
-
-        $slots = [];
-        $cursor = $from->copy()->max(Carbon::today());
-
-        for ($day = $cursor->copy(); $day->lte($until) && count($slots) < 6; $day->addDay()) {
-            if ($day->isWeekend()) {
-                continue;
-            }
-            for ($h = $open; $h < $close; $h += max(1, intdiv($slot, 60)) ?: 1) {
-                for ($m = 0; $m < 60; $m += $slot) {
-                    if ($h === $close - 1 && $m + $slot > 60) {
-                        break;
-                    }
-                    $when = $day->copy()->setTime($h, $m);
-                    if ($when->isPast()) {
-                        continue;
-                    }
-                    if ($taken->has($when->format('Y-m-d H:i'))) {
-                        continue;
-                    }
-                    $slots[] = $when->toIso8601String();
-                    if (count($slots) >= 6) {
-                        break 3;
-                    }
-                }
-            }
-        }
-
-        return ['available' => $slots, 'slot_minutes' => $slot];
+        return [
+            'available' => array_map(fn (Carbon $s): string => $s->toIso8601String(), $slots),
+            'slot_minutes' => $slot,
+        ];
     }
 
     /**
@@ -193,6 +163,15 @@ class VoiceToolRegistry
         }
 
         $minutes = (int) ($args['duration_minutes'] ?? config('voice.booking.slot_minutes', 30));
+
+        // Re-check at the moment of booking, not just when the slots were read
+        // out. A caller deliberating for two minutes is long enough for a
+        // colleague to take that slot, and the model may also propose a time it
+        // was never offered. Whichever it is, double-booking a stranger is the
+        // one failure here nobody can quietly undo.
+        if (! $this->availability->isFree($starts, max(15, $minutes), userId: null)) {
+            throw new RuntimeException('That time is no longer available. Let me offer you another moment.');
+        }
 
         $appointment = Appointment::create([
             'company_id' => $company->getKey(),
