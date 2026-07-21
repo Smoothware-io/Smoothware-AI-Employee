@@ -51,6 +51,7 @@ class CallInstructionBuilder
         ?string $objective = null,
         CallDirection $direction = CallDirection::Outbound,
         bool $withTools = false,
+        ?int $maxMinutes = null,
     ): array {
         $inbound = $direction === CallDirection::Inbound;
         $topic = $this->topic($company, $objective);
@@ -93,6 +94,15 @@ class CallInstructionBuilder
 
         if (filled($objective)) {
             $sections[] = "DOEL VAN DIT GESPREK\n{$objective}";
+        }
+
+        // Length. The AI is the only thing on this call that can actually shorten
+        // it — it holds the conversation — so it is told, rather than cut off.
+        // A cold call that overruns has usually stopped being welcome.
+        if ($maxMinutes !== null && $maxMinutes > 0) {
+            $sections[] = "LENGTE\nHoud dit gesprek onder de {$maxMinutes} minuten. "
+                .'Kom snel ter zake, vat samen, en rond netjes af zodra het doel is bereikt '
+                .'of duidelijk is dat het niet gaat lukken. Loop nooit uit om beleefd te lijken.';
         }
 
         // 3. The standing rules a human wrote and versioned (Phase 2). Same rules

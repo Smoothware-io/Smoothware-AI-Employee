@@ -75,6 +75,9 @@ class OpenAiRealtimeWebhookController extends Controller
             // The instructions must AGREE with the tools we declare below. Told it
             // can book while no gateway can execute that would be the worse lie.
             withTools: $this->gateway->configured(),
+            // The campaign's own limit, not a global one: a support callback and a
+            // cold intro are not the same length of welcome.
+            maxMinutes: $company?->campaign?->max_call_minutes,
         );
 
         $accepted = Http::withToken((string) config('outbound.openai.key'))

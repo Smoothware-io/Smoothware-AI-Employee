@@ -23,3 +23,9 @@ Schedule::job(new EvaluateTimeBasedFollowUps)->dailyAt('06:00')->withoutOverlapp
 // minutes is frequent enough that nobody stares at a stuck row for long, and rare
 // enough to be free.
 Schedule::command('calls:close-stale')->everyTenMinutes()->withoutOverlapping();
+
+// The campaign heartbeat. Ticks every minute but places at most ONE call per
+// campaign, and only when that campaign's own pace says it is due — so the
+// frequency here is resolution, not speed. withoutOverlapping because two
+// concurrent ticks would both see the same "next" company and ring it twice.
+Schedule::command('campaigns:tick')->everyMinute()->withoutOverlapping();

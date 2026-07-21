@@ -106,6 +106,33 @@ class AvailabilityCalculator
         return $this->sorted($slots);
     }
 
+    /**
+     * Are we open right now?
+     *
+     * Working hours ONLY — no appointments, no blocks. "May the dialler ring
+     * someone at this moment" is a different question from "is this slot
+     * bookable": a rep whose day is fully booked is still at work, and a
+     * campaign must not stop because the calendar is busy.
+     *
+     * Deliberately shares the same rules as booking, so there is one definition
+     * of when we work. Two definitions eventually disagree, at 21:00, on a
+     * stranger's phone.
+     */
+    public function isWithinWorkingHours(?Carbon $at = null, ?int $userId = null): bool
+    {
+        $at ??= Carbon::now();
+
+        $rules = $this->rules($userId);
+        if ($rules->isEmpty()) {
+            $rules = $this->defaultRules((array) config('voice.booking'));
+        }
+
+        return $rules
+            ->where('weekday', $at->isoWeekday())
+            ->contains(fn ($rule): bool => $at->gte($this->at($at, $rule->starts_at))
+                && $at->lt($this->at($at, $rule->ends_at)));
+    }
+
     /** Is one specific moment bookable? The check before actually booking it. */
     public function isFree(Carbon $start, int $slotMinutes, ?int $userId = null): bool
     {
